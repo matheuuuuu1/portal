@@ -33,9 +33,11 @@ Formato breve: Contexto → Decisión → Alternativas descartadas → Consecuen
 ## ADR-005 — Catálogo filtrado y proyección vectorizada
 
 - **Contexto:** el requisito es mostrar "las estrellas correctas donde apunto" en tiempo real.
-- **Decisión:** catálogo HYG v3 o Hipparcos filtrado a magnitud ≤ 6.5 (~9.000 estrellas, las visibles a simple vista); skyfield para la matriz de rotación del instante y las posiciones de los planetas; transformación y proyección con numpy vectorizado.
+- **Decisión:** catálogo filtrado a magnitud ≤ 6.5 (~9.000 estrellas, las visibles a simple vista); skyfield para la matriz de rotación del instante y las posiciones de los planetas; transformación y proyección con numpy vectorizado.
 - **Alternativas:** astropy (correcto pero pesado para tiempo real) y el catálogo completo de ~118.000 estrellas (innecesario a 720p).
 - **Consecuencias:** las posiciones son correctas para fecha/hora/lugar; la v1 usa azimut magnético sin corregir la declinación magnética (mejora futura sin cambiar la arquitectura).
+
+**Actualización (2026-08-10, Fase 6):** el catálogo de trabajo es el **Yale Bright Star Catalog** (CDS V/50, `data/catalogo/bsc5.dat`, 8.404 estrellas con mag ≤ 6.5). HYG v3 no estaba disponible como descarga directa desde la red de desarrollo (el sitio oficial sirve páginas HTML); el BSC cubre el mismo rango que el filtro mag ≤ 6.5 del HYG. El cargador (`skyrender.catalogo`) acepta formatos por nombre (`formato="bsc"`, reservado `"hyg"`), así que migrar al HYG cuando sea accesible es trivial. El resto del ADR se mantiene: filtro mag ≤ 6.5, skyfield para el instante y planetas, proyección con numpy vectorizado.
 
 ## ADR-006 — Visualización con OpenCV en la v1
 

@@ -73,6 +73,84 @@ es el punto de retoma para la próxima sesión.
     `netsh ... localport=8080`); QuickEdit de la consola de Windows pausa el
     servidor si se hace clic en la ventana mientras corre.
 
+- **Fase 6 — Astrometría: COMPLETADA y VALIDADA por el usuario.**
+  - **Catálogo:** Yale Bright Star Catalog (CDS V/50) en `data/catalogo/bsc5.dat`;
+    8.404 estrellas con mag ≤ 6.5 (el BSC completo tiene 9.110). HYG v3 no era
+    descargable desde esta red (el sitio oficial sirve HTML); el cargador acepta
+    formatos (`formato="bsc"`, reservado `"hyg"`) — ADR-005 actualizado.
+    `skyrender/catalogo.py`: `Estrella`/`Catalogo`, vectores ecuatoriales J2000,
+    búsqueda por nombre (el BSC incluye el número Flamsteed, p. ej. "21Alp And").
+  - `skyrender/astro.py`: precesión J2000→fecha con la matriz `t.M` de skyfield
+    (vectorizada, sin efemérides); matriz ecuatorial→horizontal (fórmulas de
+    Meeus, columnas = imagen de los ejes ecuatoriales); LST; matriz de vista de
+    cámara (rumbo/inclinación/roll); ubicación persistida en `data/ubicacion.json`.
+  - `skyrender/demo_astro.py`: alt/az del cielo en un instante/lugar, compara
+    contra skyfield y lista las más brillantes visibles.
+  - Efemérides `de421.bsp` descargadas a `data/models/` (Fase 7 + referencia de
+    los tests). `tools/download_models.py` ahora descarga hand_landmarker,
+    de421 y el catálogo (con descompresión del gzip del CDS).
+  - Tests: +14 → **55/55 en verde**. Precisión: 0.006° frente a skyfield;
+    Polaris a alt 9.62° az 0.5° para lat 10N (alt ≈ latitud).
+  - **Ubicación configurada (2026-08-10):** `data/ubicacion.json` =
+    lat **9.66124**, lon **-68.58268** (Puerto Cabello, Venezuela), proporcionada
+    por Matheus. La demo ya sale con esa posición: Polaris a alt 10.17° az 359.6°
+    (alt ≈ latitud ✓), Betelgeuse a alt 82° az 106° (casi el cénit), Sirius a
+    alt 56.9° az 142.8°, diferencia máxima frente a skyfield 0.006°.
+  - **Validación de Matheus (2026-08-10):** comparó contra Stellarium y la
+    comparación quedó confirmada (Estrella Polar y Orión coinciden con la demo).
+
+- **Fase 5 — Calibración: COMPLETADA y VALIDADA por el usuario.**
+  - Protocolo ampliado: `{"tipo":"calibrar","rumbo":...}` — el rumbo actual del
+    celular se declara como el norte (0). El offset se calcula en el servidor
+    (`rumbo_efectivo = (rumbo_celular − offset) mod 360`).
+  - `compass.py`: `CompassState.calibrar()` calcula el offset, lo persiste en
+    `data/calibracion.json` (ignorado en git) y lo carga al arrancar. La última
+    lectura guardada se reajusta al calibrar.
+  - `web.py`: `/estado` y `/monitor` exponen `calibrado`; el WebSocket distingue
+    orientación de calibración.
+  - `celular.html`: botón "Calibrar al norte" (envía el último rumbo absoluto).
+  - `panel.html`: muestra "Calibrado · en vivo" cuando hay offset aplicado.
+  - Tests: +6 → **38/38 en verde**. Verificación de integración sobre el
+    servidor: orientación 50 → calibrar → rumbo 0; orientación 60 → rumbo 10
+    (offset aplicado). Commit pendiente de validación y autorización.
+  - **Validación de Matheus (2026-08-10):** apuntó al norte magnético, pulsó
+    "Calibrar al norte" y el panel marcó 0 con el desfase estable → validado.
+
+- **Fase 7 — Render del cielo: COMPLETADA y VALIDADA por el usuario.**
+  - `skyrender/render.py`: clase `SkyRenderer` que proyecta las ~8.404 estrellas
+    del catálogo BSC a píxeles con proyección perspectiva, incluyendo precesión
+    cacheada (recálculo cada ~6 horas), culling del horizonte (alt > 0) y
+    caché de planetas (~1/min). Tamaño y brillo de los puntos según la magnitud;
+    las ~20 estrellas más brillantes llevan círculos de halo y etiquetas con
+    nombres propios (Sirio, Betelgeuse, Vega, etc.).
+  - `skyrender/constelaciones.py`: 17 constelaciones visibles desde lat 10°N
+    (Osa Mayor/Menor, Orión, Tauro, Géminis, Leo, Casiopea, Lira, Águila,
+    Cisne, Escorpio, Sagitario, Andrómeda, Pegaso, Cruz del Sur, Can Mayor,
+    Carina), ~80 segmentos de líneas; búsqueda por designación normalizada
+    (resuelve componentes del BSC como "41Gam1Leo" → "Gam Leo").
+  - `skyrender/demo_render.py`: ventana 1280×720 con cielo en tiempo real,
+    rumbo/inclinación interactiva (flechas), FOV ajustable (+/-) y contador FPS;
+    modo `--sin-ventana` para benchmarks.
+  - Tests: +9 → **64/64 en verde**. Medido en la laptop:521 FPS en cálculo
+    puro (sin presentación). Capturas de referencia guardadas en
+    `docs/capturas-fase7/` (Polaris + Triángulo de Verano con etiquetas).
+  - `skyrender/__init__.py` y `catalogo.py` actualizados (buscar_designacion,
+    exports nuevos).
+  - **Mejoras visuales (2026-08-10, a petición de Matheus):** estrellas de fondo
+    más brillantes (compresión con raíz cuadrada: mag 6.5 ≈ 32, mag 2 ≈ 255),
+    26 constelaciones con ~120 segmentos y líneas más sutiles
+    `_COLOR_CONSTELACION = (130, 125, 90)` en BGR.
+  - **Brillo parametrizable (2026-08-10):** `SkyRenderer(brillo_factor=2.5)`
+    por defecto (valor que prefirió Matheus); se puede ajustar en caliente
+    cambiando `renderer.brillo_factor` entre frames. La demo expone
+    `--brillo FACTOR` y las teclas `[` / `]` (0.1 a 3.0).
+  - **Modos de gesto (ADR-004, confirmado por Matheus):** el render ya distingue
+    `etiquetas=True/False`. El modo L mostrará el cielo sin nombres y el modo
+    MANO_COMPLETA con nombres (Fase 9 conectará el gesto al render).
+  - Tests de brillo añadidos → **66/66 en verde**.
+  - **Validación de Matheus (2026-08-10):** probó la demo interactiva y aprobó
+    el aspecto del cielo con brillo 2.5 → validado visualmente.
+
 ## Historial de fases
 
 | Fase | Descripción | Estado |
@@ -82,9 +160,9 @@ es el punto de retoma para la próxima sesión.
 | 2 | Detección de manos y marco | Hecho (validado por el usuario) |
 | 3 | Servidor brújula plan A (WiFi + HTTPS) | Hecho (validado por el usuario) |
 | 4 | Plan B (USB + adb reverse) | Pendiente |
-| 5 | Calibración | Pendiente |
-| 6 | Astrometría | Pendiente |
-| 7 | Render del cielo | Pendiente |
+| 5 | Calibración | Hecho (validado por el usuario) |
+| 6 | Astrometría | Hecho (validado por el usuario vs Stellarium) |
+| 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |
 | 8 | Composición | Pendiente |
 | 9 | Modos de gesto | Pendiente |
 | 10 | Optimización y robustez | Pendiente |

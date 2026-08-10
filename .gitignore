@@ -11,9 +11,12 @@ tools/gen-cert/*.pem
 tools/gen-cert/*.key
 
 # Catálogo de estrellas descargado (se obtiene en la Fase 6 del PLAN)
-data/catalogo/*.csv
-data/catalogo/*.json
-data/catalogo/*.gz
+data/catalogo/*
+!data/catalogo/.gitkeep
+
+# Calibración y ubicación locales del usuario
+data/calibracion.json
+data/ubicacion.json
 
 # Modelos y efemérides descargados (tools/download_models.py)
 data/models/
