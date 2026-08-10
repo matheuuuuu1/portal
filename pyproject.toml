@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portal-al-cielo"
+version = "0.1.0"
+description = "Ventana al cielo real: la cámara web se convierte en un portal al cielo estrellado dentro de un marco formado con las manos (MediaPipe)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.10",
+    "mediapipe>=1.0.0",
+    "numpy>=2.0",
+    "aiohttp>=3.9",
+    "skyfield>=1.49",
+]
+
+# Layout src/: los paquetes se importan como app, handtracking, skyrender,
+# compositor y server después de `pip install -e .`
+[tool.setuptools.packages.find]
+where = ["src"]

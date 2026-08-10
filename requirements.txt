@@ -1,0 +1,11 @@
+# Dependencias de Portal al Cielo (ADR-002)
+# Python 3.10 o superior (validado en 3.14 con wheels de todas las librerías)
+
+# Nota: mediapipe >=1.0 arrastra opencv-contrib-python; ambos quedan instalados
+# a la misma versión y `import cv2` funciona. Si en fases posteriores da
+# problemas, eliminar uno de los dos.
+opencv-python>=4.10        # captura de cámara y render (ADR-006)
+mediapipe>=1.0.0           # detección de manos (ADR-003)
+numpy>=2.0                 # proyección vectorizada de estrellas (ADR-005)
+aiohttp>=3.9               # servidor web/WebSocket de la brújula (ADR-001)
+skyfield>=1.49             # astrometría: rotación ecuatorial→horizontal y planetas

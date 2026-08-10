@@ -1,0 +1,22 @@
+# Entorno virtual y Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Certificados y claves privadas (nunca deben commitearse)
+tools/gen-cert/*.pem
+tools/gen-cert/*.key
+
+# Catálogo de estrellas descargado (se obtiene en la Fase 6 del PLAN)
+data/catalogo/*.csv
+data/catalogo/*.json
+data/catalogo/*.gz
+
+# IDE y utilidades
+.idea/
+.vscode/
+*.log
+.DS_Store
