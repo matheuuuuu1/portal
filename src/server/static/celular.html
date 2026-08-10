@@ -12,6 +12,8 @@
   button { width: 100%; padding: 14px; font-size: 1.05rem; border: 0; border-radius: 10px;
            background: #2e7dff; color: #fff; }
   button:disabled { background: #3a6; }
+  #calibrar { margin-top: 10px; background: #8a5; }
+  #calibrar:disabled { background: #2a3450; opacity: .55; }
   #estado { margin-top: 8px; font-size: 0.9rem; }
   .fila { display: flex; justify-content: space-between; padding: 8px 0;
           border-bottom: 1px solid #222a44; }
@@ -24,6 +26,7 @@
   <h1>Brújula · Portal al Cielo</h1>
   <div class="card">
     <button id="btn">Activar sensor</button>
+    <button id="calibrar" disabled>Calibrar al norte</button>
     <div id="estado">Desconectado</div>
   </div>
   <div class="card">
@@ -39,9 +42,11 @@
   </p>
 <script>
   const btn = document.getElementById('btn');
+  const btnCal = document.getElementById('calibrar');
   const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   let ws = null;
   let sent = 0, lastTick = 0;
+  let ultimoAlpha = 0; // último rumbo absoluto, para calibrar sin pulsar a la vez
 
   function conectar() {
     ws = new WebSocket(wsUrl);
@@ -59,6 +64,7 @@
       return;
     }
     const alpha = (e.alpha === null) ? 0 : e.alpha;   // 0-360 (norte magnético)
+    ultimoAlpha = alpha;
     const beta  = (e.beta  === null) ? 0 : e.beta;    // -180..180
     const gamma = (e.gamma === null) ? 0 : e.gamma;   // -90..90
     const inclinacion = Math.max(-90, Math.min(90, 90 - beta));
@@ -100,6 +106,17 @@
     document.getElementById('estado').textContent = 'Sensor activo (' + evento + ')';
     btn.disabled = true;
     btn.textContent = 'Sensor activo';
+    btnCal.disabled = false;
+  };
+
+  // Calibración (Fase 5): declara que el rumbo actual es el norte (0).
+  btnCal.onclick = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      alert('Activa primero el sensor.');
+      return;
+    }
+    ws.send(JSON.stringify({tipo: 'calibrar', rumbo: +ultimoAlpha.toFixed(1)}));
+    document.getElementById('estado').textContent = 'Calibrado al norte (rumbo 0)';
   };
 </script>
 </body>

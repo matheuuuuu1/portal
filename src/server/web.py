@@ -19,7 +19,7 @@ from pathlib import Path
 
 from aiohttp import WSMsgType, web
 
-from .compass import CompassState, parse_mensaje
+from .compass import Calibracion, CompassState, parse_mensaje
 
 log = logging.getLogger("portal.server")
 
@@ -67,6 +67,7 @@ class BrújulaServer:
     async def _estado_json(self, request: web.Request) -> web.Response:
         datos = self.state.get().to_dict()
         datos["fresh"] = self.state.fresh
+        datos["calibrado"] = self.state.calibrado
         return web.json_response(datos)
 
     # --- WebSockets --------------------------------------------------------
@@ -83,9 +84,12 @@ class BrújulaServer:
                     datos = json.loads(msg.data)
                 except json.JSONDecodeError:
                     continue
-                orientacion = parse_mensaje(datos)
-                if orientacion is not None:
-                    self.state.update(orientacion)
+                mensaje = parse_mensaje(datos)
+                if isinstance(mensaje, Calibracion):
+                    self.state.calibrar(mensaje.rumbo)
+                    await self._difundir_estado()
+                elif mensaje is not None:
+                    self.state.update(mensaje)
                     await self._difundir_estado()
         finally:
             pass  # el cierre lo maneja aiohttp
@@ -110,6 +114,7 @@ class BrújulaServer:
     def _estado_publico(self) -> dict:
         datos = self.state.get().to_dict()
         datos["fresh"] = self.state.fresh
+        datos["calibrado"] = self.state.calibrado
         return datos
 
     async def _difundir_estado(self) -> None:

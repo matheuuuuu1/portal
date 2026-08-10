@@ -5,8 +5,8 @@ Sirve la página estática en `/` y recibe en `/ws` los mensajes de orientación
 HTTPS con certificado auto-firmado. Plan B: HTTP vía adb reverse (Fase 4).
 """
 
-from .compass import CompassState, Orientacion, parse_mensaje
+from .compass import Calibracion, CompassState, Orientacion, parse_mensaje
 from .web import BrújulaServer, iniciar_servidor
 
-__all__ = ["CompassState", "Orientacion", "parse_mensaje",
+__all__ = ["Calibracion", "CompassState", "Orientacion", "parse_mensaje",
            "BrújulaServer", "iniciar_servidor"]

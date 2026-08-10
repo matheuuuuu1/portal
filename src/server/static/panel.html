@@ -41,7 +41,9 @@
     document.getElementById('rumbo').textContent = d.rumbo.toFixed(1) + '°';
     document.getElementById('detalle').textContent =
       'Inclinación: ' + d.inclinacion.toFixed(1) + '° · Roll: ' + d.roll.toFixed(1) + '°';
-    document.getElementById('estado').textContent = d.fresh ? 'Datos en vivo' : 'Sin datos recientes';
+    document.getElementById('estado').textContent = d.fresh
+      ? (d.calibrado ? 'Calibrado · en vivo' : 'En vivo (sin calibrar)')
+      : 'Sin datos recientes';
   };
   ws.onclose = () => { document.getElementById('estado').textContent = 'Conexión perdida'; };
   ws.onerror = () => { document.getElementById('estado').textContent = 'Error de conexión'; };
