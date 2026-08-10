@@ -9,3 +9,4 @@ mediapipe>=1.0.0           # detección de manos (ADR-003)
 numpy>=2.0                 # proyección vectorizada de estrellas (ADR-005)
 aiohttp>=3.9               # servidor web/WebSocket de la brújula (ADR-001)
 skyfield>=1.49             # astrometría: rotación ecuatorial→horizontal y planetas
+cryptography>=42.0         # generación del certificado auto-firmado sin openssl

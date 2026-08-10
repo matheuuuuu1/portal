@@ -32,9 +32,12 @@ Si la brújula no responde, este plan no funciona con este celular. Detente aqu�
 3. Actívalo: `.\.venv\Scripts\Activate.ps1`
 4. Instala las dependencias (detalle en la Fase 0 del PLAN).
 5. Genera el certificado HTTPS **una sola vez**:
-   - Ve a `tools/gen-cert` y sigue las instrucciones de su README.
-   - En esencia: `openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365`
-   - Si no tienes openssl, usa el script Python alternativo incluido en esa carpeta.
+   - `python tools/gen-cert/gen_cert.py`
+   - Opcional, para que el certificado incluya la IP de la laptop como SAN:
+     `python tools/gen-cert/gen_cert.py --ip 192.168.x.x`
+6. Inicia el servidor de la brújula:
+   - `python -m server` (Plan A: HTTPS en el puerto 8080)
+   - El panel de la laptop está en `https://localhost:8080/panel`.
 
 > [CAPTURA: terminal con el certificado generado y los dos archivos key.pem / cert.pem]
 
@@ -46,7 +49,21 @@ Si la brújula no responde, este plan no funciona con este celular. Detente aqu�
 Ambos deben estar en la misma red local (el mismo router/SSID). Anota la IP de la laptop: `ipconfig` en PowerShell → dirección IPv4 (tipo `192.168.x.x`).
 
 ### 2.2 Iniciar el servidor
-Inicia la aplicación (o el servidor por separado, según el estado de implementación). Escucha en el puerto **8080** con HTTPS.
+En la laptop: `python -m server`. Escucha en el puerto **8080** con HTTPS.
+
+> **Aviso del certificado en la laptop:** al abrir `https://localhost:8080/panel`
+> Chrome mostrará "Tu conexión no es privada". Es normal: el certificado es
+> auto-firmado. Pulsa **Avanzado → Continuar a localhost (no seguro)**.
+
+> **Firewall de Windows (obligatorio para el celular):** la laptop debe permitir
+> conexiones entrantes al puerto 8080. En PowerShell como administrador:
+>
+> ```
+> netsh advfirewall firewall add rule name="Portal al Cielo 8080" dir=in action=allow protocol=TCP localport=8080
+> ```
+>
+> O por GUI: Panel de control → Firewall de Windows → Configuración avanzada →
+> Reglas de entrada → Nueva regla → Puerto TCP 8080 → Permitir.
 
 ### 2.3 Preparar Chrome del celular
 1. En Chrome abre: `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
@@ -108,6 +125,8 @@ En Chrome del celular abre `http://localhost:8080` y repite los pasos 2.4 y 2.5 
 | El rumbo no cambia al girar | Recalibrar el magnetómetro con el movimiento en "8" (paso 0) |
 | El rumbo está desplazado | Repetir la calibración (paso 2.5) |
 | El WebSocket se desconecta | Misma WiFi, firewall de Windows permitiendo el puerto 8080 |
+| "No se puede conectar" desde el teléfono | Añadir la regla de firewall del puerto 8080 (sección 2.2); confirmar que la IP es la correcta |
+| La página no carga o avisa del certificado | Aceptar el cert con "Avanzado → Continuar"; regenerar el cert con la IP: `python tools/gen-cert/gen_cert.py --force --ip 192.168.x.x` |
 | `adb` no ve el celular | Revisar que la Depuración USB está activa y el aviso fue aceptado |
 
 ---

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brújula — Portal al Cielo</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0b1020; color: #e8e8f0;
+         margin: 0; padding: 16px; }
+  h1 { font-size: 1.2rem; margin: 0 0 8px; }
+  .card { background: #141a2e; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  button { width: 100%; padding: 14px; font-size: 1.05rem; border: 0; border-radius: 10px;
+           background: #2e7dff; color: #fff; }
+  button:disabled { background: #3a6; }
+  #estado { margin-top: 8px; font-size: 0.9rem; }
+  .fila { display: flex; justify-content: space-between; padding: 8px 0;
+          border-bottom: 1px solid #222a44; }
+  .lbl { opacity: .7; }
+  .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .nota { font-size: .8rem; opacity: .65; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <h1>Brújula · Portal al Cielo</h1>
+  <div class="card">
+    <button id="btn">Activar sensor</button>
+    <div id="estado">Desconectado</div>
+  </div>
+  <div class="card">
+    <div class="fila"><span class="lbl">Rumbo</span><span id="rumbo" class="val">---</span></div>
+    <div class="fila"><span class="lbl">Inclinación</span><span id="inclinacion" class="val">---</span></div>
+    <div class="fila"><span class="lbl">Roll</span><span id="roll" class="val">---</span></div>
+    <div class="fila"><span class="lbl">Envío</span><span id="hz" class="val">---</span></div>
+  </div>
+  <p class="nota">
+    Coloca el celular en la base de la laptop (entre teclado y pantalla), pantalla
+    hacia arriba y el borde superior apuntando hacia la pantalla: la misma orientación
+    que la cámara. La inclinación se calcula como 90° − β (0° = horizontal, +90° = cénit).
+  </p>
+<script>
+  const btn = document.getElementById('btn');
+  const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  let ws = null;
+  let sent = 0, lastTick = 0;
+
+  function conectar() {
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => { document.getElementById('estado').textContent = 'Conectado'; };
+    ws.onclose = () => { document.getElementById('estado').textContent = 'Desconectado'; };
+    ws.onerror = () => { document.getElementById('estado').textContent = 'Error de conexión'; };
+  }
+
+  function onOrientacion(e) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!e.absolute) {
+      // Chrome/Android envía el rumbo absoluto por 'deviceorientationabsolute'.
+      document.getElementById('estado').textContent =
+        'Esperando rumbo absoluto (magnetómetro)…';
+      return;
+    }
+    const alpha = (e.alpha === null) ? 0 : e.alpha;   // 0-360 (norte magnético)
+    const beta  = (e.beta  === null) ? 0 : e.beta;    // -180..180
+    const gamma = (e.gamma === null) ? 0 : e.gamma;   // -90..90
+    const inclinacion = Math.max(-90, Math.min(90, 90 - beta));
+    const msg = JSON.stringify({
+      tipo: 'orientacion',
+      rumbo: +alpha.toFixed(1),
+      inclinacion: +inclinacion.toFixed(1),
+      roll: +gamma.toFixed(1),
+      ts: Date.now() / 1000
+    });
+    ws.send(msg);
+
+    document.getElementById('rumbo').textContent = alpha.toFixed(1) + '°';
+    document.getElementById('inclinacion').textContent = inclinacion.toFixed(1) + '°';
+    document.getElementById('roll').textContent = gamma.toFixed(1) + '°';
+    sent++;
+    const now = performance.now();
+    if (now - lastTick >= 1000) {
+      document.getElementById('hz').textContent = sent + ' Hz';
+      sent = 0; lastTick = now;
+    }
+  }
+
+  btn.onclick = async () => {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') {
+        alert('Permiso denegado para el sensor de orientación.');
+        return;
+      }
+    }
+    conectar();
+    // En Chrome/Android el rumbo absoluto (magnetómetro) llega por
+    // 'deviceorientationabsolute'. En otros navegadores, por 'deviceorientation'.
+    const evento = ('ondeviceorientationabsolute' in window)
+        ? 'deviceorientationabsolute' : 'deviceorientation';
+    window.addEventListener(evento, onOrientacion);
+    document.getElementById('estado').textContent = 'Sensor activo (' + evento + ')';
+    btn.disabled = true;
+    btn.textContent = 'Sensor activo';
+  };
+</script>
+</body>
+</html>

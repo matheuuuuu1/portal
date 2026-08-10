@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel — Brújula (Portal al Cielo)</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0b1020; color: #e8e8f0;
+         margin: 0; padding: 24px; text-align: center; }
+  h1 { font-size: 1.1rem; opacity: .8; font-weight: 400; }
+  .brujula { width: 220px; height: 220px; border-radius: 50%; border: 2px solid #2e7dff;
+             margin: 20px auto; position: relative; background:
+             radial-gradient(circle at 50% 50%, #141a2e 60%, #0f1430 100%); }
+  .marca { position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+           font-size: .7rem; opacity: .7; }
+  .aguja { position: absolute; left: 50%; top: 50%; width: 4px; height: 88px;
+           margin: -88px 0 0 -2px; transform-origin: 50% 100%;
+           background: linear-gradient(#ff5252 0 50%, #2e7dff 50% 100%);
+           border-radius: 2px; }
+  .valores { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+  .detalle { opacity: .7; margin-top: 4px; }
+  .nota { margin-top: 28px; font-size: .8rem; opacity: .55; }
+</style>
+</head>
+<body>
+  <h1>Brújula · Portal al Cielo</h1>
+  <div class="brujula">
+    <div class="marca">N</div>
+    <div id="aguja" class="aguja" style="transform: rotate(0deg);"></div>
+  </div>
+  <div class="valores" id="rumbo">---</div>
+  <div class="detalle" id="detalle">Inclinación: --- · Roll: ---</div>
+  <div class="detalle" id="estado">Esperando datos del celular…</div>
+  <div class="nota">Abre esta página en la laptop (https://localhost:8080/panel).</div>
+<script>
+  const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/monitor';
+  const ws = new WebSocket(wsUrl);
+  ws.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    document.getElementById('aguja').style.transform = 'rotate(' + d.rumbo + 'deg)';
+    document.getElementById('rumbo').textContent = d.rumbo.toFixed(1) + '°';
+    document.getElementById('detalle').textContent =
+      'Inclinación: ' + d.inclinacion.toFixed(1) + '° · Roll: ' + d.roll.toFixed(1) + '°';
+    document.getElementById('estado').textContent = d.fresh ? 'Datos en vivo' : 'Sin datos recientes';
+  };
+  ws.onclose = () => { document.getElementById('estado').textContent = 'Conexión perdida'; };
+  ws.onerror = () => { document.getElementById('estado').textContent = 'Error de conexión'; };
+</script>
+</body>
+</html>
