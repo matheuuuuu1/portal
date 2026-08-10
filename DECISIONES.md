@@ -23,12 +23,12 @@ Formato breve: Contexto → Decisión → Alternativas descartadas → Consecuen
 - **Alternativas:** OpenPose (más pesado en CPU) y segmentación de fondo con OpenCV (no robusta).
 - **Consecuencias:** buena relación robustez/rendimiento; los landmarks 4 (pulgar), 8 (índice) y 12 (medio) son la base de los dos modos de gesto.
 
-## ADR-004 — Dos modos de gesto según el par de dedos (PENDIENTE DE VALIDACIÓN)
+## ADR-004 — Dos modos de gesto (VALIDADO Y ACTUALIZADO POR EL USUARIO el 2026-08-10)
 
-- **Contexto:** el marco lo forman siempre dos manos y cada una aporta dos dedos (4 esquinas). El par de dedos elegido puede cambiar el modo de visualización.
-- **Decisión:** con **pulgar + índice** de cada mano (forma de L) se ven constelaciones y planetas **sin nombres**; con **índice + dedo medio** (forma de V) se ven las mismas constelaciones y planetas, pero los **más importantes muestran su nombre**.
-- **Nota:** esta es la interpretación armada durante el diseño y queda **pendiente de confirmación del usuario**.
-- **Riesgo:** en el modo V los dos landmarks de una misma mano quedan muy próximos → cuadrilátero casi degenerado. Mitigación: suavizado y validación geométrica (Fases 2 y 10 del PLAN).
+- **Contexto:** el marco lo forman siempre dos manos y cada una aporta dos dedos (4 esquinas). El gesto de las manos puede cambiar el modo de visualización.
+- **Decisión:** con **pulgar + índice** de cada mano (forma de L) y el **medio plegado**, se ven constelaciones y planetas **sin nombres**. Con la **mano completa** (pulgar + índice + medio extendidos, palma abierta, en ambos modos las esquinas del marco son pulgar + índice) se ven las mismas constelaciones y planetas, pero los **más importantes muestran su nombre**.
+- **Nota:** el diseño original planteaba un modo V (índice + dedo medio), pero durante la implementación el usuario pidió sustituirlo por la mano completa porque le resultaba más natural de formar con ambas manos para armar el cuadro. Queda registrado como decisión validada.
+- **Riesgo (mitigado):** al usar siempre pulgar + índice como esquinas, desapareció el riesgo del cuadrilátero casi degenerado del antiguo modo V. Queda la estabilización del modo con suavizado + debounce (Fases 2 y 10 del PLAN).
 
 ## ADR-005 — Catálogo filtrado y proyección vectorizada
 

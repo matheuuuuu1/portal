@@ -24,11 +24,27 @@ es el punto de retoma para la próxima sesión.
     con el backend por defecto se logran los 30 fps. Queda documentado en
     `capture.py`.
 
-- **Fase 2 — Detección de manos y marco: EN CURSO (siguiente).**
-  - Tareas: MediaPipe Hands (pulgar/índice/medio + lateralidad), cuadrilátero
-    de 4 puntos, suavizado, validación de degeneración y selección de modo.
-  - Hecho cuando: el cuadrilátero se dibuja en vivo y el modo cambia según el
-    gesto sin parpadeos.
+- **Fase 2 — Detección de manos y marco: IMPLEMENTADA; falta re-validar el gesto.**
+  - **API**: MediaPipe 1.0.0 eliminó `mp.solutions.hands`; se usa la Tasks API
+    (`HandLandmarker`), que requiere el modelo externo `hand_landmarker.task`
+    (7.8 MB) descargado a `data/models/` con `tools/download_models.py`.
+  - `src/handtracking/`: `detector.py` (HandDetector), `gesture.py` (dedos
+    extendidos + modo L/MANO_COMPLETA/NINGUNO), `quadrilateral.py` (4 esquinas
+    ordenadas + validación de área mínima), `smoothing.py` (EMA),
+    `pipeline.py` (HandPipeline con debounce de modo), `demo_hands.py`.
+  - Tests: `tests/test_gesture.py`, `tests/test_quadrilateral.py`,
+    `tests/test_smoothing.py` → **22/22 en verde**.
+  - Rendimiento medido sin ventana: pipeline completo **31.2-31.8 fps**.
+  - **Gesto (ADR-004) — interpretación VALIDADA por el usuario 2026-08-10:**
+    - Modo **L** (pulgar + índice extendidos, medio PLEGADO): sin nombres.
+    - Modo **MANO_COMPLETA** (pulgar + índice + medio extendidos, palma
+      abierta): con nombres. Sustituye al antiguo modo V (índice + medio).
+    - El usuario pidió estabilizar la L: se bajó el factor del pulgar de 1.15
+      a 1.10 y el margen de extensión de 0.04 a 0.035, y se añadió un
+      **debounce de 3 frames** en `HandPipeline` para que el modo no parpadee.
+  - **Pendiente de Matheus:** ejecutar `python -m handtracking.demo_hands`,
+    probar la L y la mano completa, y confirmar que ambas responden sin
+    parpadeos (la demo muestra por mano P/I/M = 1/0 de dedos extendidos).
 
 ## Historial de fases
 
@@ -36,7 +52,7 @@ es el punto de retoma para la próxima sesión.
 |---|---|---|
 | 0 | Infraestructura y entorno | Hecho |
 | 1 | Captura de cámara | Hecho (validado por el usuario) |
-| 2 | Detección de manos y marco | En curso |
+| 2 | Detección de manos y marco | Implementada (falta validar visualmente) |
 | 3 | Servidor brújula plan A (WiFi + HTTPS) | Pendiente |
 | 4 | Plan B (USB + adb reverse) | Pendiente |
 | 5 | Calibración | Pendiente |
@@ -55,6 +71,7 @@ es el punto de retoma para la próxima sesión.
   requirements pide `opencv-python`; ambos 5.0.0.93 quedaron instalados y
   `import cv2` funciona (misma versión, sin conflicto visible). Si en fases
   posteriores da problemas, se elimina uno de los dos.
-- En la Fase 2 hay que **verificar la API de MediaPipe 1.0.0** (Hands) antes
-  de codificar: la API legacy `mp.solutions.hands` puede haber cambiado.
+- **MediaPipe 1.0.0**: la API legacy `mp.solutions.hands` fue ELIMINADA; se
+  usa la Tasks API (`HandLandmarker`) con el modelo `hand_landmarker.task`
+  descargado por `tools/download_models.py`.
 - `data/catalogo` y `tools/gen-cert` quedan con `.gitkeep` (vacías por diseño).

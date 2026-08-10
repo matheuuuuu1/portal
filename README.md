@@ -8,12 +8,12 @@ Tu celular Android hace de brújula (magnetómetro) y envía rumbo e inclinació
 
 ## Dos modos de gesto
 
-El marco lo forman siempre **dos manos**, cada una aporta **dos dedos** (4 esquinas del rectángulo). El par de dedos elegido cambia el modo:
+El marco lo forman siempre **dos manos**, cada una aporta **dos dedos** (pulgar e índice, las 4 esquinas del rectángulo). El gesto de la mano cambia el modo:
 
-- **Pulgar + índice** de cada mano (forma de L): se ven constelaciones y planetas, **sin nombres**.
-- **Índice + dedo medio** de cada mano (forma de V): las mismas constelaciones y planetas, pero los **más importantes muestran su nombre** al lado.
+- **L** (pulgar + índice extendidos, medio plegado): se ven constelaciones y planetas, **sin nombres**.
+- **Mano completa** (pulgar + índice + medio extendidos, palma abierta): las mismas constelaciones y planetas, pero los **más importantes muestran su nombre** al lado.
 
-> Nota: esta interpretación del gesto está pendiente de validación final (ver mensaje de cierre del diseño).
+> Decisión de gesto validada con el usuario (ADR-004, 2026-08-10).
 
 ## Requisitos
 

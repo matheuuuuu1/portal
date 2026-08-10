@@ -15,6 +15,9 @@ data/catalogo/*.csv
 data/catalogo/*.json
 data/catalogo/*.gz
 
+# Modelos y efemérides descargados (tools/download_models.py)
+data/models/
+
 # IDE y utilidades
 .idea/
 .vscode/
