@@ -28,10 +28,11 @@ import numpy as np
 from skyfield.api import load, wgs84
 
 from .astro import (RUTA_EFEMERIDES, Ubicacion, aplicar_matriz,
-                    cargar_ubicacion, lst_grados, matriz_horizontal,
-                    matriz_vista_camara, precesionar_vectores_j2000)
+                    altaz_desde_horizontal, cargar_ubicacion, lst_grados,
+                    matriz_horizontal, matriz_vista_camara,
+                    precesionar_vectores_j2000)
 from .catalogo import RUTA_CATALOGO, Catalogo, cargar_estrellas
-from .constelaciones import segmentos
+from .constelaciones import CONSTELACIONES, segmentos
 from .estetica import ESTETICAS, aplicar, fondo_noche_profunda
 
 # Nombres propios de las estrellas más brillantes. El campo Name del BSC
@@ -61,6 +62,14 @@ _PLANETAS: tuple[tuple[str, str], ...] = (
     ("Neptuno", "neptune barycenter"),
     ("Luna", "moon"),
 )
+
+# Magnitudes típicas de los planetas y la Luna, para ordenar la lista de
+# objetos visibles por brillo. Son valores aproximados (no de una fecha
+# concreta), solo de ordenación; no se muestran como dato.
+_MAG_PLANETA: dict[str, float] = {
+    "Luna": -12.7, "Venus": -4.5, "Júpiter": -2.5, "Saturno": 0.5,
+    "Mercurio": 0.0, "Marte": 1.0, "Urano": 5.7, "Neptuno": 7.9,
+}
 
 _MAG_LIMITE = 6.5          # umbral del catálogo
 _MAG_CIRCULO = 1.6         # estrellas que se dibujan como círculo
@@ -112,6 +121,16 @@ class SkyRenderer:
         self._segmentos_idx: list[tuple[int, int]] = [
             (id_a_indice[ea.id], id_a_indice[eb.id])
             for ea, eb in segmentos(self.catalogo)]
+        # Estrellas miembro por constelación (para la lista de objetos; se
+        # resuelven una sola vez al construir el renderer).
+        self._constelaciones: list[tuple[str, list[int]]] = []
+        for constelacion in CONSTELACIONES:
+            miembros = [
+                id_a_indice[e.id]
+                for a, _b in constelacion.segmentos
+                if (e := self.catalogo.buscar_designacion(a)) is not None
+            ]
+            self._constelaciones.append((constelacion.nombre, miembros))
         self._nombres_por_indice: dict[int, str] = {}
         for e in self.catalogo.estrellas:
             # El nombre del BSC es "9Alp CMa" (número Flamsteed + Bayer +
@@ -207,6 +226,112 @@ class SkyRenderer:
         alt = math.degrees(math.asin(float(np.clip(v_hor[2], -1.0, 1.0))))
         az = math.degrees(math.atan2(v_hor[1], v_hor[0])) % 360.0
         return az, alt
+
+    # ------------------------------------------------------------------
+    # Consulta de objetos visibles (lista de la demo)
+    # ------------------------------------------------------------------
+
+    def objetos_visibles(self, t, rumbo: float, inclinacion: float,
+                         roll: float = 0.0) -> list[dict]:
+        """Objetos celestes a la vista en la orientación actual.
+
+        Devuelve una lista de dicts ``{"tipo", "nombre", "az", "alt", "mag"}``
+        con las estrellas con nombre propio, los planetas (y la Luna) y las
+        constelaciones que caen dentro del encuadre de la cámara. ``az`` y
+        ``alt`` son el punto al que apuntar para centrar el objeto; ``mag`` es
+        la magnitud (``None`` para las constelaciones) y solo se usa para
+        ordenar la lista por brillo: primero las estrellas y planetas más
+        brillantes y al final las constelaciones por orden alfabético.
+
+        Es la información que usa la demo para la lista de la tecla ``o``.
+        """
+        v_eq = self._v_ecuatoriales_aparentes(t)
+        if len(v_eq) == 0:
+            return []
+
+        lat = self.ubicacion.lat
+        lst = lst_grados(self.ubicacion.lon, float(t.gast))
+        M_hor = matriz_horizontal(lat, lst)
+        v_hor = aplicar_matriz(M_hor, v_eq)
+        M_cam = matriz_vista_camara(rumbo, inclinacion, roll)
+        v_cam = aplicar_matriz(M_cam, v_hor)
+
+        z = v_cam[:, 2]
+        frente = z > 0.0
+        sobre_horizonte = v_hor[:, 2] > 0.0
+        u, v = self._proyectar(v_cam)
+        dentro = (frente & sobre_horizonte
+                  & (u >= 0) & (u < self.ancho)
+                  & (v >= 0) & (v < self.alto))
+        idx_dentro = np.where(dentro)[0]
+
+        objetos: list[dict] = []
+
+        # --- estrellas con nombre propio dentro del encuadre ---
+        if len(idx_dentro):
+            alt, az = altaz_desde_horizontal(v_hor[idx_dentro])
+            for i, (a, azi) in enumerate(zip(alt, az)):
+                j = int(idx_dentro[i])
+                nombre = self._nombres_por_indice.get(
+                    int(self.catalogo.estrellas[j].id))
+                if not nombre:
+                    continue
+                objetos.append({
+                    "tipo": "estrella", "nombre": nombre,
+                    "az": float(azi), "alt": float(a),
+                    "mag": float(self.catalogo.estrellas[j].mag),
+                })
+
+        # --- planetas y la Luna dentro del encuadre ---
+        for nombre, (px, py, pz) in self._planetas_horizontales(t).items():
+            if pz <= 0.0:            # bajo el horizonte
+                continue
+            vc = M_cam @ np.array([px, py, pz])
+            if vc[2] <= 0.0:
+                continue
+            uu = self._cx + self._fx * vc[0] / vc[2]
+            vv = self._cy - self._fy * vc[1] / vc[2]
+            if not (0 <= uu < self.ancho and 0 <= vv < self.alto):
+                continue
+            alt_p = math.degrees(math.asin(float(np.clip(pz, -1.0, 1.0))))
+            az_p = math.degrees(math.atan2(py, px)) % 360.0
+            objetos.append({
+                "tipo": "planeta", "nombre": nombre,
+                "az": az_p, "alt": alt_p,
+                "mag": _MAG_PLANETA[nombre],
+            })
+
+        # --- constelaciones con al menos una estrella a la vista ---
+        for nombre_c, miembros in self._constelaciones:
+            idx_m = np.asarray(miembros, dtype=int)
+            if len(idx_m) == 0 or not np.isin(idx_m, idx_dentro).any():
+                continue
+            # Centro: media de los vectores horizontales de los miembros
+            # sobre el horizonte (aunque no estén en el encuadre).
+            sobre_h = idx_m[v_hor[idx_m, 2] > 0.0]
+            if len(sobre_h) == 0:
+                continue
+            centro = v_hor[sobre_h].mean(axis=0)
+            norma = np.linalg.norm(centro)
+            if norma < 1e-12:
+                continue
+            centro = centro / norma
+            alt_c = math.degrees(math.asin(
+                float(np.clip(centro[2], -1.0, 1.0))))
+            az_c = math.degrees(math.atan2(centro[1], centro[0])) % 360.0
+            objetos.append({
+                "tipo": "constelacion", "nombre": nombre_c,
+                "az": az_c, "alt": alt_c, "mag": None,
+            })
+
+        # Orden: astros por brillo (mag menor primero), luego constelaciones
+        # por nombre.
+        objetos.sort(key=lambda o: (
+            o["mag"] is None,
+            o["mag"] if o["mag"] is not None else 0.0,
+            o["nombre"],
+        ))
+        return objetos
 
     def _fondo_estetica(self) -> np.ndarray:
         """Degradado de fondo de la estética en uint8, creado una sola vez."""

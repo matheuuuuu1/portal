@@ -76,6 +76,8 @@ orientación real. Para la imagen cruda de la cámara usa `portal --no-espejo`.
 | m | modo del marco (ventana / completo) |
 | c | medidor de coordenadas bajo el cursor |
 | **i** | panel completo de información (FPS, orientación, gesto, etiquetas, estética, marco, brillo, resoluciones, ubicación, brújula) |
+| **o** | lista de objetos visibles ahora (estrellas con nombre, planetas/Luna y constelaciones); **1-9 / 0** apunta la cámara a ese objeto |
+| **b** | brújula: activa (el celular manda) ↔ manual (flechas y lista controlan la vista) |
 | r | devolver rumbo/inclinación a los iniciales |
 | q / ESC | salir |
 

@@ -31,6 +31,11 @@ Teclas dentro de la ventana:
 - i: mostrar/ocultar el panel completo de información (FPS, orientación,
   gesto, etiquetas, estética, marco, brillo, resoluciones, ubicación,
   estado de la brújula y si la cámara está espejada).
+- o: mostrar/ocultar la lista de objetos visibles ahora (estrellas con
+  nombre propio, planetas/Luna y constelaciones). Pulsa 1-9 / 0 para
+  apuntar la cámara a ese objeto (az/alt exactos).
+- b: brújula activa (el celular manda) ↔ manual (las flechas y la lista
+  controlan la orientación).
 - r: devolver el rumbo/inclinación a los iniciales.
 - q / ESC: salir.
 
@@ -123,6 +128,9 @@ def espejar(img: np.ndarray, activo: bool) -> np.ndarray:
     return cv2.flip(img, 1) if activo else img
 
 
+# Teclas 1-9 y 0 (décimo) para apuntar a un objeto de la lista (tecla o).
+_TECLAS_NUMERO = tuple(ord(str(d)) for d in range(1, 10)) + (ord("0"),)
+
 _COLOR_PANEL = (235, 235, 235)
 
 
@@ -154,7 +162,7 @@ def _dibujar_panel_info(img: np.ndarray, lineas: list[str],
 
 def _lineas_info(fps, rumbo, inclinacion, roll, hand_frame, etq_label,
                  renderer, compositor, brillo, args, ubicacion,
-                 brujula) -> list[str]:
+                 brujula, brujula_activa: bool = True) -> list[str]:
     """Líneas de texto del panel completo (tecla i)."""
     lineas = [
         f"FPS: {fps:5.1f}   rumbo {rumbo:6.1f}   incl {inclinacion:5.1f}"
@@ -177,11 +185,36 @@ def _lineas_info(fps, rumbo, inclinacion, roll, hand_frame, etq_label,
             estado = f"fresca (hace {edad:.1f} s)"
         else:
             estado = f"caduca (hace {edad:.1f} s)"
-        lineas.append(f"brújula: {brujula.url} — {estado}")
+        modo = "activa" if brujula_activa else "manual (teclado)"
+        lineas.append(f"brújula: {brujula.url} — {estado} — {modo}")
     else:
         lineas.append("brújula: sin servidor (teclado)")
     if not hand_frame.valid:
         lineas.append("SIN MARCO: forma una ventana con ambas manos")
+    return lineas
+
+
+def _lineas_objetos(objetos: list[dict], brujula_activa: bool) -> list[str]:
+    """Líneas del panel de objetos visibles (tecla o).
+
+    El primer número de cada línea (1-9, 0 = décimo) es la tecla que apunta
+    la cámara a ese objeto. Si la brújula manda, un número la pasa a manual
+    y apunta.
+    """
+    lineas = ["Objetos visibles — pulsa el número para apuntar"]
+    if not objetos:
+        lineas.append("(ninguno en esta vista)")
+        return lineas
+    for i, o in enumerate(objetos[:10], start=1):
+        num = str(i % 10)          # 1-9, 0 = décimo
+        detalle = f"  mag {o['mag']:5.1f}" if o["tipo"] == "estrella" else ""
+        lineas.append(
+            f"{num} {o['nombre']:<12} az {o['az']:6.1f} alt {o['alt']:+5.1f}"
+            f"{detalle}")
+    if len(objetos) > 10:
+        lineas.append(f"(... {len(objetos) - 10} más fuera de la lista)")
+    if not brujula_activa:
+        lineas.append("brújula manual: flechas y números controlan la vista")
     return lineas
 
 
@@ -325,6 +358,9 @@ def run(argv=None) -> int:
     etiquetas = False   # valor efectivo; en "auto" lo decide el gesto (F9)
     brillo = args.brillo
     mostrar_info = False   # panel completo de información (tecla i)
+    mostrar_objetos = False  # lista de objetos visibles (tecla o)
+    brujula_activa = True    # la brújula manda; b pasa a manual
+    objetos: list[dict] = []  # calculados cada frame si `mostrar_objetos`
 
     # El cielo se renderiza a 540p por defecto (Fase 10, mitigación del
     # ADR-007) y el compositor lo escala al tamaño del frame; ahorra ~7 ms.
@@ -347,6 +383,7 @@ def run(argv=None) -> int:
     print("Fase 8/9 — Composición. Flechas: rumbo/inclinación. "
           "[ / ]: brillo. n: etiquetas (auto/sí/no). e: estética. "
           "m: modo del marco. c: medidor del cursor. i: panel de info. "
+          "o: objetos visibles (1-9/0 apunta). b: brújula manual. "
           "r: reiniciar. q/ESC: salir.")
     print(f"Render del cielo: {renderer.ancho}x{renderer.alto} "
           f"(el frame es {compositor.ancho}x{compositor.alto}).")
@@ -382,13 +419,16 @@ def run(argv=None) -> int:
 
                 hand_frame = pipeline.process(frame)
 
-                # --- orientación: brújula si está fresca, si no teclado ---
-                if brujula is not None:
+                # --- orientación: brújula si está fresca Y activa; si no,
+                # teclado (flechas y lista de objetos). b cambia el modo. ---
+                if brujula is not None and brujula_activa:
                     o = brujula.orientacion()
                     if o is not None:
                         rumbo, inclinacion, roll = o
                     else:
                         roll = 0.0
+                elif brujula is not None:
+                    roll = 0.0      # manual: sin escora del teléfono
 
                 # --- Fase 9: las etiquetas siguen al gesto (L sin nombres,
                 # MANO_COMPLETA con nombres); con "si"/"no" se fuerzan ---
@@ -400,9 +440,14 @@ def run(argv=None) -> int:
                     etiquetas = False
 
                 # --- cielo de esa dirección y composición ---
-                cielo = renderer.render(ts.now(), rumbo % 360.0,
+                t = ts.now()
+                cielo = renderer.render(t, rumbo % 360.0,
                                         inclinacion, roll,
                                         etiquetas=etiquetas)
+                if mostrar_objetos:
+                    # Mismo instante t para no recomputar la precesión.
+                    objetos = renderer.objetos_visibles(
+                        t, rumbo % 360.0, inclinacion, roll)
                 if hand_frame.valid:
                     salida = compositor.compone(frame, cielo,
                                                 hand_frame.quad_smooth)
@@ -415,12 +460,15 @@ def run(argv=None) -> int:
                     etq_label = f"auto ({'sí' if etiquetas else 'no'})"
                 else:
                     etq_label = "sí" if etiquetas else "no"
-                if mostrar_info:
+                if mostrar_objetos:
+                    _dibujar_panel_info(
+                        salida, _lineas_objetos(objetos, brujula_activa))
+                elif mostrar_info:
                     _dibujar_panel_info(
                         salida, _lineas_info(
                             fps, rumbo, inclinacion, roll, hand_frame,
                             etq_label, renderer, compositor, brillo, args,
-                            ubicacion, brujula))
+                            ubicacion, brujula, brujula_activa))
                 else:
                     cv2.putText(salida,
                                 f"FPS: {fps:5.1f}  rumbo {rumbo:6.1f}  "
@@ -493,8 +541,32 @@ def run(argv=None) -> int:
                     print(f"Modo del marco: {compositor.modo}")
                 elif tecla == ord("i"):
                     mostrar_info = not mostrar_info
+                    if mostrar_info:
+                        mostrar_objetos = False
                     print("Panel de información: "
                           f"{'mostrando' if mostrar_info else 'oculto'}")
+                elif tecla == ord("o"):
+                    mostrar_objetos = not mostrar_objetos
+                    if mostrar_objetos:
+                        mostrar_info = False
+                    print("Lista de objetos visibles: "
+                          f"{'mostrando' if mostrar_objetos else 'oculto'}")
+                elif tecla == ord("b"):
+                    brujula_activa = not brujula_activa
+                    print("Brújula: " + ("activa (el celular manda)"
+                                         if brujula_activa else
+                                         "manual (flechas y lista)"))
+                elif tecla in _TECLAS_NUMERO and mostrar_objetos:
+                    i = 9 if tecla == ord("0") else tecla - ord("1")
+                    if 0 <= i < len(objetos):
+                        obj = objetos[i]
+                        rumbo, inclinacion = obj["az"], obj["alt"]
+                        roll = 0.0
+                        if brujula is not None and brujula_activa:
+                            brujula_activa = False
+                            print("Brújula: manual (apuntado por teclado).")
+                        print(f"Apuntando a {obj['tipo']}: {obj['nombre']} "
+                              f"(az {obj['az']:.1f}°, alt {obj['alt']:.1f}°)")
                 elif tecla == ord("r"):
                     rumbo, inclinacion = base
         finally:

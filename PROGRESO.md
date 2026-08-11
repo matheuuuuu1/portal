@@ -7,9 +7,10 @@ es el punto de retoma para la próxima sesión.
 
 **Última fase completada: Fase 11 — Integración final.** Punto de entrada
 único (`portal`), flujo guiado en terminal, docs actualizadas.
-**116/116 tests en verde.**
-Extras post-Fase 11: tecla `i` (panel completo de información) y cámara
-espejada por defecto (`--no-espejo` para la imagen cruda).
+**125/125 tests en verde.**
+Extras post-Fase 11: tecla `i` (panel completo de información), cámara
+espejada por defecto (`--no-espejo` para la imagen cruda) y lista de objetos
+visibles con apuntado por teclado (tecla `o`, números 1-9/0).
 *Pendiente: prueba de usuario completa (Matheus completa el flujo de principio
 a fin sin intervención del desarrollador).*
 
@@ -314,7 +315,17 @@ a fin sin intervención del desarrollador).*
       cielo se renderiza sin voltear para que los nombres de constelaciones
       y planetas queden legibles y las estrellas en su orientación real.
       Se desactiva con `--no-espejo`.
-    - Tests: **116/116 en verde** (11 nuevos en `tests/test_demo_extra.py`).
+    - **Lista de objetos visibles (tecla `o`):** `SkyRenderer.objetos_visibles`
+      devuelve las estrellas con nombre propio, los planetas/Luna y las
+      constelaciones que caen dentro del encuadre, con su az/alt para
+      apuntar. La demo muestra la lista numerada (1-9, 0 = décimo) y la
+      tecla correspondiente centra la cámara en ese objeto (az/alt exactos).
+      La tecla `b` alterna brújula activa ↔ manual; al apuntar con un número
+      se pasa automáticamente a manual para que el celular no cancele el
+      apuntado.
+    - Tests: **125/125 en verde** (8 nuevos en `tests/test_objetos_visibles.py`:
+      Sirio y Can Mayor a la vista al apuntar, vacío mirando al suelo,
+      estructura y orden por brillo de cada objeto, numeración del panel).
 
 ## Historial de fases
 
