@@ -252,6 +252,12 @@ ADR-007, más robustez ante modelos faltantes y pérdida de manos.
   - **Resultado medido (sintético, render 960x540):** ciclo completo
     **24.9 ms/frame → ~40 FPS** (objetivo ADR-007: 30 FPS a 720p).
     Desglose: manos **13.5 ms**, composición **6.1 ms**, render **5.2 ms**.
+  - **Resultado medido en Iris Xe real (2026-08-11, --camera 0, 540p):**
+    sin manos visibles (0/17993 composiciones) → **33.3 ms/frame → 30.0 FPS**
+    (captura mediana 3.3 ms / manos 13.2 ms / render 5.0 ms; CPU 82-97%).
+    Con composición estimada (+6-8 ms) → ~24-25 FPS. La captura de la cámara
+    tiene varianza alta (p95 ~44 ms), que tira el promedio. **Pendiente: soak
+    de 10 min con manos formando ventana para validar estabilidad.**
   - **Mitigación 1 — estética en uint8 (la mayor ganancia):** el resplandor
     del halo se colorea a **1/4 de resolución** (la interpolación lineal del
     resize conmuta con el escalado por color → resultado píxel-idéntico,
