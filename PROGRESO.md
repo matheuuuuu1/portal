@@ -8,9 +8,9 @@ es el punto de retoma para la próxima sesión.
 **Última fase completada: Fase 10 — Optimización y robustez.** Benchmark del
 pipeline completo y mitigaciones de rendimiento para cumplir los 30 FPS del
 ADR-007, más robustez ante modelos faltantes y pérdida de manos.
-**98/98 tests en verde.** Working tree limpio (commit `0a3efa9`).
-*Pendiente: validación del usuario del criterio de "hecho" — 30 FPS sostenidos
-10 min con la cámara real (comando en la Fase 10 más abajo).*
+**98/98 tests en verde.** Working tree limpio (commits `0a3efa9`–`ea80801`).
+*Validado por el usuario: 27.2 FPS con cámara real + composición en Iris Xe,
+aceptado como suficiente para el efecto de portal.*
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
   - Repositorio git inicializado (rama `main`); primer commit realizado.
@@ -240,7 +240,7 @@ ADR-007, más robustez ante modelos faltantes y pérdida de manos.
   - **Suite completa: 95/95 tests en verde** (2 nuevos de ida y vuelta de la
     proyección → inversa + 4 nuevos de etiquetas según gesto).
 
-- **Fase 10 — Optimización y robustez: COMPLETADA (2026-08-11).**
+- **Fase 10 — Optimización y robustez: COMPLETADA y VALIDADA por el usuario (2026-08-11).**
   - **Herramienta de benchmark:** `tools/benchmark_fase10.py` mide cada etapa
     del pipeline por separado (captura / manos / render / composición) en µs
     (media, mediana, p95, FPS) más el ciclo completo y el uso de CPU
@@ -297,7 +297,7 @@ ADR-007, más robustez ante modelos faltantes y pérdida de manos.
 | 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |
 | 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
 | 9 | Modos de gesto | Hecho (validado por el usuario) |
-| 10 | Optimización y robustez | Hecho (benchmark + mitigaciones; validación de usuario pendiente) |
+| 10 | Optimización y robustez | Hecho (validado: 27 FPS Iris Xe con cámara real) |
 | 11 | Integración final y prueba de usuario | Pendiente |
 
 ## Notas de implementación
