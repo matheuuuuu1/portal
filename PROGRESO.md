@@ -8,7 +8,7 @@ es el punto de retoma para la próxima sesión.
 **Última fase completada: Fase 10 — Optimización y robustez.** Benchmark del
 pipeline completo y mitigaciones de rendimiento para cumplir los 30 FPS del
 ADR-007, más robustez ante modelos faltantes y pérdida de manos.
-**98/98 tests en verde.** Working tree limpio (commit `f10-*`).
+**98/98 tests en verde.** Working tree limpio (commit `0a3efa9`).
 *Pendiente: validación del usuario del criterio de "hecho" — 30 FPS sostenidos
 10 min con la cámara real (comando en la Fase 10 más abajo).*
 
