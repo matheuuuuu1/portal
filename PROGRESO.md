@@ -5,12 +5,11 @@ es el punto de retoma para la próxima sesión.
 
 ## Estado actual (2026-08-11)
 
-**Última fase completada: Fase 10 — Optimización y robustez.** Benchmark del
-pipeline completo y mitigaciones de rendimiento para cumplir los 30 FPS del
-ADR-007, más robustez ante modelos faltantes y pérdida de manos.
-**98/98 tests en verde.** Working tree limpio (commits `0a3efa9`–`ea80801`).
-*Validado por el usuario: 27.2 FPS con cámara real + composición en Iris Xe,
-aceptado como suficiente para el efecto de portal.*
+**Última fase completada: Fase 11 — Integración final.** Punto de entrada
+único (`portal`), flujo guiado en terminal, docs actualizadas.
+**105/105 tests en verde.**
+*Pendiente: prueba de usuario completa (Matheus completa el flujo de principio
+a fin sin intervención del desarrollador).*
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
   - Repositorio git inicializado (rama `main`); primer commit realizado.
@@ -283,6 +282,28 @@ aceptado como suficiente para el efecto de portal.*
   - **Tests: 98/98 en verde** (nuevos: catálogo ausente con mensaje claro,
     compositor con cielo a menor resolución en ambos modos).
 
+- **Fase 11 — Integración final: COMPLETADA (2026-08-11).**
+  - **Punto de entrada único:** `src/app/main.py` con `main()` que verifica
+    prerequisites (modelos, catálogo, certificado), arranca el servidor de la
+    brújula en un hilo daemon con su propio event loop, muestra instrucciones
+    guiadas en la terminal (IP, URL del celular, pasos de calibración) y lanza
+    la demo con `--brujula` automático. El `CompassReader` del demo se conecta
+    al servidor dentro del mismo proceso.
+  - **Console script `portal`:** añadido en `pyproject.toml`
+    (`[project.scripts] portal = "app.main:main"`). Después de `pip install -e .`
+    el comando `portal` arranca servidor + demo.
+  - **Args del launcher:** `--host`, `--port`, `--no-tls` (servidor) más todos
+    los args del demo (`--camera`, `--fov`, `--rumbo`, `--brillo`, `--estetica`,
+    etc.) que se pasan directamente vía `parse_known_args`.
+  - **Demo standalone preservada:** `python -m compositor.demo_compositor`
+    sigue funcionando sin servidor (sin modificar su `run()`; solo se le agregó
+    el parámetro `argv=None` para compatibilidad).
+  - **Tests: 105/105 en verde** (7 nuevos en `tests/test_main.py`: verificación
+    de prerequisites y certificados con mocks de `Path.exists`).
+  - **Docs actualizadas:** README.md con el comando `portal` y la sección
+    "Flujo de uso"; `docs/configuracion-celular.md` actualizada en las
+    secciones 1.6 y 2.2 para mencionar `portal`.
+
 ## Historial de fases
 
 | Fase | Descripción | Estado |
@@ -298,7 +319,7 @@ aceptado como suficiente para el efecto de portal.*
 | 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
 | 9 | Modos de gesto | Hecho (validado por el usuario) |
 | 10 | Optimización y robustez | Hecho (validado: 27 FPS Iris Xe con cámara real) |
-| 11 | Integración final y prueba de usuario | Pendiente |
+| 11 | Integración final y prueba de usuario | Hecho (pendiente validación de usuario) |
 
 ## Notas de implementación
 

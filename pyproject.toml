@@ -20,3 +20,6 @@ dependencies = [
 # compositor y server después de `pip install -e .`
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[project.scripts]
+portal = "app.main:main"

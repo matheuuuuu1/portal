@@ -27,9 +27,35 @@ El marco lo forman siempre **dos manos**, cada una aporta **dos dedos** (pulgar 
 
 1. Clonar el proyecto y crear el entorno virtual de Python.
 2. Instalar las dependencias.
-3. Generar el certificado HTTPS auto-firmado (una sola vez): `tools/gen-cert`.
-4. Iniciar la aplicación.
-5. Configurar el celular siguiendo `docs/configuracion-celular.md`, abrir la página y calibrar.
+3. Generar el certificado HTTPS auto-firmado (una sola vez): `python tools/gen-cert/gen_cert.py`
+4. Descargar modelos y catálogo: `python tools/download_models.py`
+5. Iniciar la aplicación con **un solo comando**: `portal`
+6. Configurar el celular siguiendo `docs/configuracion-celular.md`, abrir la página y calibrar.
+
+```bash
+# Inicio rápido (Plan A: HTTPS):
+portal
+
+# Inicio rápido (Plan B: USB/HTTP):
+portal --no-tls
+
+# Solo el servidor (para desarrollo):
+python -m server
+
+# Solo la demo (sin servidor, para desarrollo):
+python -m compositor.demo_compositor
+```
+
+## Flujo de uso
+
+1. Ejecuta `portal` en la terminal.
+2. Abre `https://<IP>:8080` en el celular (acepta el cert auto-firmado).
+3. Activa el sensor de orientación en la página del celular.
+4. Apunta al norte magnético y pulsa **Calibrar**.
+5. Forma una ventana con ambas manos (pulgar + índice de cada mano).
+6. El cielo estrellado real aparece dentro del marco — gira para explorar.
+7. **L** (pulgar + índice): sin nombres. **Mano completa**: con nombres.
+8. q o ESC para salir.
 
 ## Estructura del proyecto
 

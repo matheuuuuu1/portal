@@ -159,7 +159,7 @@ def _ubicacion(args, aviso=False) -> Ubicacion:
     return Ubicacion(lat=10.0, lon=-68.0, nombre="por defecto")
 
 
-def run() -> int:
+def run(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Demo de composición: cielo dentro del marco de las manos (F8)")
     parser.add_argument("--fov", type=float, default=60.0,
@@ -208,7 +208,7 @@ def run() -> int:
                         help="ancho del render del cielo (def. 960 = 540p)")
     parser.add_argument("--render-alto", type=int, default=540,
                         help="alto del render del cielo (def. 540 = 540p)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     ubicacion = _ubicacion(args, aviso=True)
     print(f"Ubicación: {ubicacion.nombre} (lat {ubicacion.lat:.4f}, "

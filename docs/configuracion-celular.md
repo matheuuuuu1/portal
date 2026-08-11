@@ -35,8 +35,9 @@ Si la brújula no responde, este plan no funciona con este celular. Detente aqu�
    - `python tools/gen-cert/gen_cert.py`
    - Opcional, para que el certificado incluya la IP de la laptop como SAN:
      `python tools/gen-cert/gen_cert.py --ip 192.168.x.x`
-6. Inicia el servidor de la brújula:
-   - `python -m server` (Plan A: HTTPS en el puerto 8080)
+6. Inicia la aplicación:
+   - **Opción recomendada:** `portal` (arranca servidor + demo juntos)
+   - **Solo el servidor:** `python -m server` (Plan A: HTTPS en el puerto 8080)
    - El panel de la laptop está en `https://localhost:8080/panel`.
 
 > [CAPTURA: terminal con el certificado generado y los dos archivos key.pem / cert.pem]
@@ -49,7 +50,7 @@ Si la brújula no responde, este plan no funciona con este celular. Detente aqu�
 Ambos deben estar en la misma red local (el mismo router/SSID). Anota la IP de la laptop: `ipconfig` en PowerShell → dirección IPv4 (tipo `192.168.x.x`).
 
 ### 2.2 Iniciar el servidor
-En la laptop: `python -m server`. Escucha en el puerto **8080** con HTTPS.
+En la laptop: `portal` (recomendado, arranca servidor + demo) o `python -m server` (solo servidor). Escucha en el puerto **8080** con HTTPS.
 
 > **Aviso del certificado en la laptop:** al abrir `https://localhost:8080/panel`
 > Chrome mostrará "Tu conexión no es privada". Es normal: el certificado es
