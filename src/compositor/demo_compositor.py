@@ -35,9 +35,11 @@ Teclas dentro de la ventana:
 - q / ESC: salir.
 
 La cámara se muestra **espejada por defecto** (modo selfie): la mano
-derecha sale a la derecha de la imagen, igual que en un espejo. El cielo
-se voltea junto con la escena para que el portal se mantenga coherente.
-Con `--no-espejo` se muestra la imagen cruda de la cámara.
+derecha sale a la derecha de la imagen, igual que en un espejo. Solo se
+voltea el frame de la cámara; el cielo se renderiza sin voltear, así los
+nombres de constelaciones y planetas quedan legibles y las estrellas en su
+orientación real (como en Stellarium). Con `--no-espejo` se muestra la
+imagen cruda de la cámara.
 
 Fase 9: las etiquetas siguen al gesto — el modo L muestra el cielo sin
 nombres y el modo MANO_COMPLETA con los nombres de los astros más
@@ -114,8 +116,9 @@ def espejar(img: np.ndarray, activo: bool) -> np.ndarray:
     """Voltea la imagen horizontalmente si `activo` (modo selfie).
 
     Con el espejo, la mano derecha sale a la derecha de la pantalla (como
-    en un espejo). Se aplica a la imagen ya compuesta, así el cielo y el
-    marco se voltean junto con la escena y el portal se mantiene coherente.
+    en un espejo). Se aplica SOLO al frame de la cámara; el cielo se
+    renderiza sin voltear para que los nombres de los astros queden
+    legibles y las estrellas en su orientación real.
     """
     return cv2.flip(img, 1) if activo else img
 
@@ -371,6 +374,12 @@ def run(argv=None) -> int:
                     print("Aviso: la cámara dejó de entregar frames.")
                     break
 
+                # --- espejo (modo selfie): se voltea SOLO el frame de la
+                # cámara, para que la mano derecha salga a la derecha. El
+                # cielo se renderiza sin voltear: los nombres de astros
+                # quedan legibles y las estrellas en su orientación real. ---
+                frame = espejar(frame, args.espejo)
+
                 hand_frame = pipeline.process(frame)
 
                 # --- orientación: brújula si está fresca, si no teclado ---
@@ -399,10 +408,6 @@ def run(argv=None) -> int:
                                                 hand_frame.quad_smooth)
                 else:
                     salida = frame
-
-                # --- espejo (modo selfie): se voltea la imagen ya compuesta,
-                # así el cielo y el marco se voltean junto con la escena ---
-                salida = espejar(salida, args.espejo)
 
                 # --- OSD ---
                 fps = tick(time.perf_counter())
@@ -440,10 +445,6 @@ def run(argv=None) -> int:
                     # (540p): se escalan las coordenadas del cursor.
                     rx = cursor["x"] * escala_medidor[0]
                     ry = cursor["y"] * escala_medidor[1]
-                    # Con el espejo, el píxel que ve el cursor en la imagen
-                    # volteada corresponde al espejado del render.
-                    if args.espejo:
-                        rx = renderer.ancho - 1 - rx
                     az, alt = renderer.altaz_del_pixel(
                         rx, ry, rumbo % 360.0, inclinacion, roll)
                     _dibujar_medidor(salida, cursor["x"], cursor["y"], az, alt)

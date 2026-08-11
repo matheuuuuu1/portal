@@ -11,6 +11,7 @@ import unittest
 import cv2
 import numpy as np
 
+from compositor.compositor import Compositor
 from compositor.demo_compositor import (CompassReader, _dibujar_panel_info,
                                         espejar)
 
@@ -48,6 +49,39 @@ class TestEspejo(unittest.TestCase):
         frame = _frame_simple()
         doble = espejar(espejar(frame, True), True)
         np.testing.assert_array_equal(doble, frame)
+
+
+class TestEspejoNoVolteaElCielo(unittest.TestCase):
+    """El espejo voltea la cámara, NO el cielo: los nombres de astros deben
+    quedar legibles. Regresión del bug en que se volteaba la imagen final y
+    las etiquetas del cielo salían invertidas."""
+
+    def test_la_escena_se_espeja_pero_el_cielo_queda_legible(self):
+        ancho, alto = 320, 240
+        # "Mano derecha": mancha roja a la izquierda en el frame crudo.
+        frame = np.zeros((alto, ancho, 3), dtype=np.uint8)
+        frame[20:40, 20:60] = (0, 0, 255)
+        # Cielo con texto legible "ESTE" en la mitad izquierda del marco.
+        cielo = np.zeros((alto, ancho, 3), dtype=np.uint8)
+        cv2.putText(cielo, "ESTE", (40, 120), cv2.FONT_HERSHEY_SIMPLEX,
+                    1.5, (255, 255, 255), 3)
+        comp = Compositor(ancho=ancho, alto=alto, borde_suave=0.0)
+        quad_izq = [(0, 0), (0.5, 0), (0.5, 1), (0, 1)]
+
+        # Flujo real: se voltea el frame (selfie) y se compone el cielo SIN
+        # voltear. La ventana cubre la mitad izquierda.
+        salida = comp.compone(espejar(frame, True), cielo, quad_izq)
+
+        # 1) El cielo dentro del marco queda como está (texto legible).
+        np.testing.assert_array_equal(salida[20:220, 20:140],
+                                      cielo[20:220, 20:140])
+        # 2) No es el cielo espejado (los nombres no se invierten).
+        self.assertFalse(np.array_equal(salida[20:220, 20:140],
+                                        espejar(cielo, True)[20:220, 20:140]),
+                         "el cielo está invertido: los nombres saldrían al revés")
+        # 3) La "mano derecha" (mancha roja) pasó a la derecha de la escena.
+        self.assertTrue(bool(salida[30, 280].any()),
+                        "la mano derecha debería verse a la derecha")
 
 
 class TestPanelInfo(unittest.TestCase):

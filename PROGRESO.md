@@ -310,9 +310,10 @@ a fin sin intervención del desarrollador).*
       pantalla (FPS, orientación, gesto, etiquetas, estética, marco, brillo,
       resoluciones, ubicación, estado de la brújula y espejo).
     - **Cámara espejada por defecto** (modo selfie): la mano derecha sale a
-      la derecha de la imagen. El cielo se voltea junto con la escena para
-      que el portal se mantenga coherente; el medidor corrige la coordenada
-      X con el espejo. Se desactiva con `--no-espejo`.
+      la derecha de la imagen. Solo se voltea el frame de la cámara; el
+      cielo se renderiza sin voltear para que los nombres de constelaciones
+      y planetas queden legibles y las estrellas en su orientación real.
+      Se desactiva con `--no-espejo`.
     - Tests: **116/116 en verde** (11 nuevos en `tests/test_demo_extra.py`).
 
 ## Historial de fases

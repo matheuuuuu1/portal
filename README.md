@@ -59,9 +59,10 @@ python -m compositor.demo_compositor
 9. q o ESC para salir.
 
 La cámara se muestra **espejada** por defecto (modo selfie): tu mano
-derecha sale a la derecha de la imagen, como en un espejo. El cielo se
-voltea junto con la escena para que el portal se mantenga coherente. Para
-la imagen cruda de la cámara usa `portal --no-espejo`.
+derecha sale a la derecha de la imagen, como en un espejo. Solo se voltea
+el frame de la cámara: el cielo se renderiza sin voltear, así los nombres
+de constelaciones y planetas quedan legibles y las estrellas en su
+orientación real. Para la imagen cruda de la cámara usa `portal --no-espejo`.
 
 ### Teclas dentro de la ventana
 
