@@ -8,15 +8,20 @@
 - la **imagen del cielo** (BGR, misma resolución que el frame, de
   `skyrender.render.SkyRenderer`).
 
-Calcula la homografía desde las esquinas de la imagen del cielo hacia las 4
-esquinas del cuadrilátero y aplica `cv2.warpPerspective`, de modo que la
-porción de cielo que corresponde a la dirección de la cámara aparece dentro
-del marco. El resto del frame permanece intacto.
-
 La imagen del cielo se proyecta con la MISMA matriz de cámara y el mismo FOV
-que el frame (el render llena toda la ventana); el marco simplemente recorta
-el subconjunto que el usuario encierra con las manos, por lo que las estrellas
-dentro del marco son las reales de esa dirección.
+que el frame, así que el render llena la ventana alineado con la vista de la
+cámara. Dos modos de incrustación (parámetro `modo` de `Compositor`):
+
+- **"ventana" (por defecto):** el marco es una ventana real sobre ese cielo:
+  muestra únicamente el pedazo de render que cae debajo del cuadrilátero, a
+  su escala natural — lo que se vería si el render fuese del tamaño de la
+  cámara (lo es). No hay warp: el cielo queda anclado a la vista de la cámara
+  y el marco se limita a revelarlo (máscara + blending).
+- **"completo":** warpea la imagen completa del cielo dentro del cuadrilátero
+  (el marco muestra todo el FOV comprimido). Era el comportamiento original de
+  la Fase 8; se conserva para comparar.
+
+En ambos modos el resto del frame permanece intacto.
 """
 
 from __future__ import annotations
@@ -103,28 +108,46 @@ class Compositor:
 
     Uso::
 
-        compositor = Compositor(borde_suave=2.0)
+        compositor = Compositor(borde_suave=2.0)          # modo "ventana"
+        compositor = Compositor(modo="completo")           # warp del FOV completo
         salida = compositor.compone(frame_bgr, cielo_bgr, quad_normalizado)
+
+    El modo se puede cambiar en caliente asignando `compositor.modo`.
 
     `quad_normalizado` puede ser None (o degenerado): entonces se devuelve el
     frame tal cual, sin modificar.
     """
 
+    MODOS = ("ventana", "completo")
+
     def __init__(self, ancho: int = OBJ_WIDTH, alto: int = OBJ_HEIGHT,
                  borde_suave: float = 0.0,
-                 min_area: float = MIN_AREA) -> None:
+                 min_area: float = MIN_AREA,
+                 modo: str = "ventana") -> None:
+        if modo not in self.MODOS:
+            raise ValueError(
+                f"Modo de composición desconocido: {modo!r}. "
+                f"Disponibles: {', '.join(self.MODOS)}.")
         self.ancho = ancho
         self.alto = alto
         self.borde_suave = borde_suave
         self.min_area = min_area
+        self.modo = modo
 
     def compone(self, frame_bgr: np.ndarray, cielo_bgr: np.ndarray,
                 quad: Optional[Sequence[Tuple[float, float]]]) -> np.ndarray:
         """Devuelve el frame con el cielo incrustado dentro del marco.
 
         Sin marco (None), cuadrilátero inválido o resolución inesperada, se
-        devuelve el frame original. Con marco, se warpea el cielo hacia el
-        cuadrilátero y se mezcla; el resto de los píxeles no cambia.
+        devuelve el frame original. Con marco:
+
+        - modo "ventana": el render ya está alineado con la cámara (misma
+          resolución y FOV), así que el marco lo revela tal cual, anclado a su
+          posición — solo se muestra el pedazo de cielo que cae bajo el marco.
+        - modo "completo": se warpea la imagen completa del cielo hacia el
+          cuadrilátero (todo el FOV comprimido en el marco).
+
+        El resto de los píxeles no cambia en ningún modo.
         """
         # Validación de defensa: el pipeline ya valida, pero ante cualquier
         # degeneración (área mínima, esquinas colineales) se conserva el frame.
@@ -135,14 +158,21 @@ class Compositor:
             return frame_bgr
 
         quad_px = quad_a_pixeles(quad, self.ancho, self.alto)
-        try:
-            M = homografia_marco(quad_px, self.ancho, self.alto)
-            warpeado = cv2.warpPerspective(
-                cielo_bgr, M, (self.ancho, self.alto),
-                flags=cv2.INTER_LINEAR,
-                borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-        except cv2.error:
-            return frame_bgr  # cuadrilátero no invertible -> marco intacto
+        if self.modo == "ventana":
+            # El cielo ocupa la cámara completa: el marco es una ventana que
+            # recorta el pedazo que queda debajo. Sin warp, más rápido.
+            if cielo_bgr.shape[:2] != (self.alto, self.ancho):
+                return frame_bgr  # resolución inesperada -> marco intacto
+            warpeado = cielo_bgr
+        else:
+            try:
+                M = homografia_marco(quad_px, self.ancho, self.alto)
+                warpeado = cv2.warpPerspective(
+                    cielo_bgr, M, (self.ancho, self.alto),
+                    flags=cv2.INTER_LINEAR,
+                    borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            except cv2.error:
+                return frame_bgr  # cuadrilátero no invertible -> marco intacto
 
         mascara = _mascara_u8(quad_px, self.ancho, self.alto, self.borde_suave)
         return _mezclar(frame_bgr, warpeado, mascara)

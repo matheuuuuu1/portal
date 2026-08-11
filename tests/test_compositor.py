@@ -1,8 +1,10 @@
 """Tests de la composición: incrustar el cielo dentro del marco (Fase 8).
 
-Verifican la homografía, el warp y, sobre todo, el criterio de "hecho" de la
-fase: el cielo aparece dentro del cuadrilátero del marco y el resto del frame
-permanece intacto.
+Verifican los dos modos de `Compositor` y, sobre todo, el criterio de "hecho"
+de la fase: el cielo aparece dentro del cuadrilátero del marco y el resto del
+frame permanece intacto. El modo por defecto ("ventana") muestra solo el
+pedazo de cielo que cae bajo el marco (anclado a la cámara); "completo"
+comprime todo el FOV dentro del marco (warp).
 """
 
 import time
@@ -29,6 +31,18 @@ def _frame_gradiente():
 
 def _cielo_verde():
     return np.full((ALTO, ANCHO, 3), (0, 255, 0), dtype=np.uint8)
+
+
+def _cielo_mancha_centro():
+    """Render sintético: negro salvo una mancha verde en el centro exacto.
+
+    Distingue los dos modos: en "ventana" la mancha solo se ve si el marco la
+    cubre (el cielo está anclado a la cámara); en "completo" la mancha siempre
+    aparece porque todo el cielo se comprime dentro del marco.
+    """
+    cielo = np.zeros((ALTO, ANCHO, 3), dtype=np.uint8)
+    cielo[ALTO // 2 - 4:ALTO // 2 + 5, ANCHO // 2 - 4:ANCHO // 2 + 5] = (0, 255, 0)
+    return cielo
 
 
 # Marco centrado y bien dentro del frame, en coordenadas normalizadas.
@@ -105,11 +119,12 @@ class TestComposicion(unittest.TestCase):
                                          [(0.1, 0.1), (0.9, 0.1)])
         self.assertIs(salida, self.frame)
 
-    def test_marco_rotado_incrusta_cielo_rotado(self):
-        # Marco "al revés": BR y TL intercambiados -> el cielo aparece volteado.
+    def test_marco_invertido_no_rompe(self):
+        # Orden de esquinas "al revés" (BR y TL intercambiados): en ambos
+        # modos el marco sigue incrustando el cielo y no rompe la composición.
         rotado = [QUAD[2], QUAD[1], QUAD[0], QUAD[3]]
         salida = self.compositor.compone(self.frame, self.cielo, rotado)
-        # El centro sigue cayendo dentro del marco y es el cielo.
+        # El centro del frame cae dentro del marco y es el cielo.
         np.testing.assert_array_equal(salida[ALTO // 2, ANCHO // 2], (0, 255, 0))
 
     def test_rendimiento_objetivo(self):
@@ -122,6 +137,66 @@ class TestComposicion(unittest.TestCase):
         promedio_ms = total / 30.0 * 1000.0
         self.assertLess(promedio_ms, 50.0,
                         f"la composición es demasiado lenta: {promedio_ms:.1f} ms")
+
+
+class TestModoVentana(unittest.TestCase):
+    """Modo "ventana": el marco revela el cielo anclado a la cámara.
+
+    El render ocupa la cámara completa (misma resolución y FOV); el marco
+    solo muestra el pedazo de cielo que cae debajo de él, sin warp.
+    """
+
+    def setUp(self):
+        self.frame = _frame_gradiente()
+        self.cielo = _cielo_mancha_centro()
+
+    def test_el_marco_recorta_el_cielo_anclado(self):
+        comp = Compositor(ancho=ANCHO, alto=ALTO, borde_suave=0.0,
+                          modo="ventana")
+        # Marco centrado: la mancha del centro del render queda bajo el marco.
+        salida = comp.compone(self.frame, self.cielo, QUAD)
+        np.testing.assert_array_equal(salida[ALTO // 2, ANCHO // 2], (0, 255, 0))
+        # Un punto dentro del marco pero lejos de la mancha es NEGRO (el
+        # render es negro ahí), no el frame: el cielo está anclado a la
+        # cámara y no se comprime ni se desplaza dentro del marco.
+        x, y = int(0.4 * ANCHO), int(0.6 * ALTO)
+        np.testing.assert_array_equal(salida[y, x], (0, 0, 0))
+
+    def test_el_pedazo_depende_de_la_posicion_del_marco(self):
+        comp = Compositor(ancho=ANCHO, alto=ALTO, borde_suave=0.0,
+                          modo="ventana")
+        # Marco arriba a la izquierda: la mancha (centro del render) queda
+        # FUERA del marco, así que dentro del marco no hay verde.
+        quad_tl = [(0.05, 0.05), (0.3, 0.05), (0.3, 0.3), (0.05, 0.3)]
+        salida = comp.compone(self.frame, self.cielo, quad_tl)
+        cx, cy = int(0.175 * ANCHO), int(0.175 * ALTO)
+        np.testing.assert_array_equal(salida[cy, cx], (0, 0, 0))
+        # Y el centro del render (640, 360) queda fuera del marco: el frame
+        # sigue intacto ahí (el cielo no se dibuja desplazado).
+        np.testing.assert_array_equal(salida[ALTO // 2, ANCHO // 2],
+                                      self.frame[ALTO // 2, ANCHO // 2])
+
+    def test_modo_completo_comprime_todo_el_cielo(self):
+        # Contraste: en "completo" el cielo entero se warpea al marco, así
+        # que la mancha del centro aparece aunque el marco esté a un lado.
+        comp = Compositor(ancho=ANCHO, alto=ALTO, borde_suave=0.0,
+                          modo="completo")
+        quad_tl = [(0.05, 0.05), (0.3, 0.05), (0.3, 0.3), (0.05, 0.3)]
+        salida = comp.compone(self.frame, self.cielo, quad_tl)
+        cx, cy = int(0.175 * ANCHO), int(0.175 * ALTO)
+        # La mancha del centro del cielo se comprime dentro del marco: en la
+        # vecindad del centro del marco debe aparecer verde puro. (La
+        # interpolación del warp deja el píxel exacto a media intensidad y la
+        # precisión flotante desvía ±1 px; el frame nunca tiene verde 255 con
+        # rojo 0 en esa zona, así que la comprobación es inequívoca.)
+        region = salida[cy - 3:cy + 4, cx - 3:cx + 4]
+        verde_puro = (region[:, :, 1] == 255) & (region[:, :, 0] == 0)
+        self.assertTrue(bool(verde_puro.any()),
+                        "la mancha del centro debería verse en el marco")
+
+    def test_modo_invalido_lanza(self):
+        with self.assertRaises(ValueError):
+            Compositor(ancho=ANCHO, alto=ALTO, modo="no-existe")
 
 
 class TestBordeSuave(unittest.TestCase):

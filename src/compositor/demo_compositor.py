@@ -23,6 +23,8 @@ Teclas dentro de la ventana:
 - ←/a →/d: rumbo.  ↑/w ↓/s: inclinación.
 - [ / ]: brillo de las estrellas.  n: alternar etiquetas de nombres.
 - e: cambiar la estética del cielo (plano / noche profunda).
+- m: cambiar el modo del marco (ventana recorta el cielo anclado /
+  completo comprime todo el FOV en el marco).
 - r: devolver el rumbo/inclinación a los iniciales.
 - q / ESC: salir.
 
@@ -146,6 +148,11 @@ def run() -> int:
     parser.add_argument("--estetica", default="noche_profunda",
                         choices=sorted(ESTETICAS),
                         help="estética del cielo (def. noche_profunda)")
+    parser.add_argument("--modo", default="ventana",
+                        choices=Compositor.MODOS,
+                        help="cómo incrustar el cielo en el marco: "
+                             "'ventana' recorta el pedazo de cielo bajo el "
+                             "marco (def.); 'completo' warpea todo el FOV")
     parser.add_argument("--brujula", default="",
                         help="URL del servidor de la brújula, p. ej. "
                              "https://localhost:8080 (debe ser https://; si se "
@@ -180,13 +187,13 @@ def run() -> int:
                            brillo_factor=brillo, estetica=args.estetica)
     renderer.ubicacion = ubicacion
     compositor = Compositor(ancho=1280, alto=720,
-                            borde_suave=args.borde_suave)
+                            borde_suave=args.borde_suave, modo=args.modo)
     ts = load.timescale()
     tick = fps_counter()
 
     print("Fase 8 — Composición. Flechas: rumbo/inclinación. "
-          "[ / ]: brillo. n: etiquetas. e: estética. r: reiniciar. "
-          "q/ESC: salir.")
+          "[ / ]: brillo. n: etiquetas. e: estética. m: modo del marco. "
+          "r: reiniciar. q/ESC: salir.")
 
     with CameraCapture(index=args.camera).open() as cam:
         pipeline = HandPipeline()
@@ -226,7 +233,8 @@ def run() -> int:
                             (0, 255, 0), 1, cv2.LINE_AA)
                 modo = (f"MODO: {hand_frame.mode}   etiquetas: "
                         f"{'SÍ' if etiquetas else 'no'}   "
-                        f"estética: {renderer.estetica}")
+                        f"estética: {renderer.estetica}   "
+                        f"marco: {compositor.modo}")
                 if not hand_frame.valid:
                     modo += "   [SIN MARCO: forma una ventana con ambas manos]"
                 cv2.putText(salida, modo, (10, 54),
@@ -259,6 +267,11 @@ def run() -> int:
                     i = (nombres.index(renderer.estetica) + 1) % len(nombres)
                     renderer.estetica = nombres[i]
                     print(f"Estética del cielo: {renderer.estetica}")
+                elif tecla == ord("m"):
+                    nombres = list(Compositor.MODOS)
+                    i = (nombres.index(compositor.modo) + 1) % len(nombres)
+                    compositor.modo = nombres[i]
+                    print(f"Modo del marco: {compositor.modo}")
                 elif tecla == ord("r"):
                     rumbo, inclinacion = base
         finally:

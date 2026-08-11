@@ -212,7 +212,16 @@ es el punto de retoma para la próxima sesión.
     tiempo real (el resplandor se difumina a 1/4 de resolución y el fondo
     se suma en uint8): render a ~19 ms/frame (~52 fps) con la estética;
     la demo queda muy por encima de los 30 fps del ADR-007.
-  - **Suite completa: 85/85 tests en verde** (4 tests nuevos de estética).
+  - **Modo "ventana" en la composición (2026-08-11):** el render ya ocupa la
+    cámara completa (misma resolución y FOV), así que el marco ahora actúa
+    como una ventana real que muestra SOLO el pedazo de cielo que queda debajo
+    de él, a su escala natural, sin warp. Antes el compositor comprimía todo
+    el FOV dentro del marco. El comportamiento anterior se conserva como
+    `Compositor(modo="completo")` (demo: `--modo` o tecla `m`) para comparar.
+    Más rápido (sin warpPerspective) y físicamente más correcto: el cielo
+    queda anclado a la vista de la cámara.
+  - **Suite completa: 89/89 tests en verde** (4 nuevos de estética + 4 de modo
+    ventana).
 
 ## Historial de fases
 
