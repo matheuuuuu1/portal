@@ -139,11 +139,13 @@ class Compositor:
         """Devuelve el frame con el cielo incrustado dentro del marco.
 
         Sin marco (None), cuadrilátero inválido o resolución inesperada, se
-        devuelve el frame original. Con marco:
+        devuelve el frame original. El cielo puede venir a menor resolución que
+        el frame (mismo FOV; Fase 10): se escala al tamaño del frame antes de
+        incrustar. Con marco:
 
-        - modo "ventana": el render ya está alineado con la cámara (misma
-          resolución y FOV), así que el marco lo revela tal cual, anclado a su
-          posición — solo se muestra el pedazo de cielo que cae bajo el marco.
+        - modo "ventana": el render ya está alineado con la cámara (mismo FOV),
+          así que el marco lo revela tal cual, anclado a su posición — solo se
+          muestra el pedazo de cielo que cae bajo el marco.
         - modo "completo": se warpea la imagen completa del cielo hacia el
           cuadrilátero (todo el FOV comprimido en el marco).
 
@@ -157,12 +159,18 @@ class Compositor:
         if frame_bgr.shape[:2] != (self.alto, self.ancho):
             return frame_bgr
 
+        # El cielo puede venir a resolución reducida (Fase 10: mitigación
+        # 540p — mismo FOV, menos píxeles). Se escala al tamaño del frame para
+        # alinear la proyección con la cámara; en "completo" además la
+        # homografía se define sobre las esquinas del frame.
+        if cielo_bgr.shape[:2] != (self.alto, self.ancho):
+            cielo_bgr = cv2.resize(cielo_bgr, (self.ancho, self.alto),
+                                   interpolation=cv2.INTER_LINEAR)
+
         quad_px = quad_a_pixeles(quad, self.ancho, self.alto)
         if self.modo == "ventana":
             # El cielo ocupa la cámara completa: el marco es una ventana que
             # recorta el pedazo que queda debajo. Sin warp, más rápido.
-            if cielo_bgr.shape[:2] != (self.alto, self.ancho):
-                return frame_bgr  # resolución inesperada -> marco intacto
             warpeado = cielo_bgr
         else:
             try:

@@ -204,6 +204,10 @@ def run() -> int:
     parser.add_argument("--lon", type=float, help="longitud (si no, la guardada)")
     parser.add_argument("--camera", type=int, default=0,
                         help="índice de la cámara web (def. 0)")
+    parser.add_argument("--render-ancho", type=int, default=960,
+                        help="ancho del render del cielo (def. 960 = 540p)")
+    parser.add_argument("--render-alto", type=int, default=540,
+                        help="alto del render del cielo (def. 540 = 540p)")
     args = parser.parse_args()
 
     ubicacion = _ubicacion(args, aviso=True)
@@ -226,11 +230,21 @@ def run() -> int:
     etiquetas = False   # valor efectivo; en "auto" lo decide el gesto (F9)
     brillo = args.brillo
 
-    renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=args.fov,
-                           brillo_factor=brillo, estetica=args.estetica)
+    # El cielo se renderiza a 540p por defecto (Fase 10, mitigación del
+    # ADR-007) y el compositor lo escala al tamaño del frame; ahorra ~7 ms.
+    try:
+        renderer = SkyRenderer(ancho=args.render_ancho, alto=args.render_alto,
+                               fov_deg=args.fov,
+                               brillo_factor=brillo, estetica=args.estetica)
+    except FileNotFoundError as e:
+        print(f"Error al cargar el cielo: {e}")
+        return 1
     renderer.ubicacion = ubicacion
     compositor = Compositor(ancho=1280, alto=720,
                             borde_suave=args.borde_suave, modo=args.modo)
+    # El medidor recibe píxeles de la ventana completa; se escalan al render.
+    escala_medidor = (renderer.ancho / compositor.ancho,
+                      renderer.alto / compositor.alto)
     ts = load.timescale()
     tick = fps_counter()
 
@@ -238,9 +252,15 @@ def run() -> int:
           "[ / ]: brillo. n: etiquetas (auto/sí/no). e: estética. "
           "m: modo del marco. c: medidor del cursor. r: reiniciar. "
           "q/ESC: salir.")
+    print(f"Render del cielo: {renderer.ancho}x{renderer.alto} "
+          f"(el frame es {compositor.ancho}x{compositor.alto}).")
 
     with CameraCapture(index=args.camera).open() as cam:
-        pipeline = HandPipeline()
+        try:
+            pipeline = HandPipeline()
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            return 1
         cv2.namedWindow(WINDOW_NAME)
         cursor = {"x": -1, "y": -1}
 
@@ -307,9 +327,12 @@ def run() -> int:
 
                 # --- medidor: rumbo/alt exactos del punto bajo el cursor ---
                 if args.medidor and cursor["x"] >= 0:
+                    # El render puede ser a menor resolución que la ventana
+                    # (540p): se escalan las coordenadas del cursor.
+                    rx = cursor["x"] * escala_medidor[0]
+                    ry = cursor["y"] * escala_medidor[1]
                     az, alt = renderer.altaz_del_pixel(
-                        cursor["x"], cursor["y"], rumbo % 360.0,
-                        inclinacion, roll)
+                        rx, ry, rumbo % 360.0, inclinacion, roll)
                     _dibujar_medidor(salida, cursor["x"], cursor["y"], az, alt)
 
                 cv2.imshow(WINDOW_NAME, salida)

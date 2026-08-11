@@ -5,8 +5,12 @@ es el punto de retoma para la próxima sesión.
 
 ## Estado actual (2026-08-11)
 
-**Última fase completada: Fase 9 — Modos de gesto conectados al render (L sin nombres, MANO_COMPLETA con nombres), validada por el usuario.**
-95/95 tests en verde. Working tree limpio.
+**Última fase completada: Fase 10 — Optimización y robustez.** Benchmark del
+pipeline completo y mitigaciones de rendimiento para cumplir los 30 FPS del
+ADR-007, más robustez ante modelos faltantes y pérdida de manos.
+**98/98 tests en verde.** Working tree limpio (commit `f10-*`).
+*Pendiente: validación del usuario del criterio de "hecho" — 30 FPS sostenidos
+10 min con la cámara real (comando en la Fase 10 más abajo).*
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
   - Repositorio git inicializado (rama `main`); primer commit realizado.
@@ -236,6 +240,43 @@ es el punto de retoma para la próxima sesión.
   - **Suite completa: 95/95 tests en verde** (2 nuevos de ida y vuelta de la
     proyección → inversa + 4 nuevos de etiquetas según gesto).
 
+- **Fase 10 — Optimización y robustez: COMPLETADA (2026-08-11).**
+  - **Herramienta de benchmark:** `tools/benchmark_fase10.py` mide cada etapa
+    del pipeline por separado (captura / manos / render / composición) en µs
+    (media, mediana, p95, FPS) más el ciclo completo y el uso de CPU
+    (`time.process_time()`), sin dependencias extra. Frames sintéticos por
+    defecto (headless, CI) o `--camera N` con la cámara real. Flags:
+    `--frames`, `--warmup`, `--render-ancho/alto`, `--estetica-plano`, y
+    `--soak-segundos N` (modo resistencia: informa FPS por ventana cada
+    ~10 s para detectar degradación por fugas o caché).
+  - **Resultado medido (sintético, render 960x540):** ciclo completo
+    **24.9 ms/frame → ~40 FPS** (objetivo ADR-007: 30 FPS a 720p).
+    Desglose: manos **13.5 ms**, composición **6.1 ms**, render **5.2 ms**.
+  - **Mitigación 1 — estética en uint8 (la mayor ganancia):** el resplandor
+    del halo se colorea a **1/4 de resolución** (la interpolación lineal del
+    resize conmuta con el escalado por color → resultado píxel-idéntico,
+    verificado diff máx 0) y se elimina la ida y vuelta float32 de trama
+    completa. La estética pasó de **~8 ms a ~3 ms** en 540p.
+  - **Mitigación 2 — render a 540p por defecto:** la demo ahora renderiza el
+    cielo a 960x540 (`--render-ancho/alto`, def. 540p; el medidor escala las
+    coordenadas del cursor). El compositor es agnóstico a la resolución
+    (`compone` escala el cielo al tamaño del frame si viene menor, también en
+    modo "completo"). Mismo FOV, menos píxeles.
+  - **Mitigación 3 (medida y RECHAZADA) — caché de matriz horizontal:** se
+    implementó y se midió en ~6 µs/frame (despreciable), y congelar la matriz
+    ecuatorial→horizontal 1 min haría un salto visible de ~4 px en 540p (el
+    LST avanza 0.25°/min). Contramedida peor que el problema → revertida.
+  - **Mitigación 4 (descartada) — detectar manos a resolución reducida:** se
+    midió que MediaPipe re-muestrea internamente (720p=13.3 ms vs
+    252p=11.7 ms); no vale la complejidad.
+  - **Robustez:** la demo captura `FileNotFoundError` del modelo de manos y del
+    catálogo con mensaje claro ("Ejecuta: python tools/download_models.py") en
+    vez de un traceback; `cargar_estrellas` da el mismo mensaje amigable; la
+    pérdida de manos sigue el flujo ya existente (frame intacto + aviso
+    "SIN MARCO", sin bloqueos ni cuadriláteros degenerados).
+  - **Tests: 98/98 en verde** (nuevos: catálogo ausente con mensaje claro,
+    compositor con cielo a menor resolución en ambos modos).
+
 ## Historial de fases
 
 | Fase | Descripción | Estado |
@@ -250,7 +291,7 @@ es el punto de retoma para la próxima sesión.
 | 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |
 | 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
 | 9 | Modos de gesto | Hecho (validado por el usuario) |
-| 10 | Optimización y robustez | Pendiente |
+| 10 | Optimización y robustez | Hecho (benchmark + mitigaciones; validación de usuario pendiente) |
 | 11 | Integración final y prueba de usuario | Pendiente |
 
 ## Notas de implementación

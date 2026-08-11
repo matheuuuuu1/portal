@@ -52,6 +52,14 @@ class TestCatalogo(unittest.TestCase):
         with self.assertRaises(ValueError):
             cargar_estrellas(formato="hyg")
 
+    def test_catalogo_ausente_da_mensaje_claro(self):
+        # Robustez (Fase 10): si falta el catálogo, el error dice cómo
+        # descargarlo, no un FileNotFoundError con la ruta pelada.
+        with self.assertRaises(FileNotFoundError) as ctx:
+            cargar_estrellas(ruta="data/catalogo/no-existe.dat")
+        mensaje = str(ctx.exception)
+        self.assertIn("download_models", mensaje)
+
 
 if __name__ == "__main__":
     unittest.main()

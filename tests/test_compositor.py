@@ -105,6 +105,31 @@ class TestComposicion(unittest.TestCase):
         self.assertEqual(salida.shape, (ALTO, ANCHO, 3))
         self.assertEqual(salida.dtype, np.uint8)
 
+    def test_cielo_a_menor_resolucion_se_escala_al_frame(self):
+        # Fase 10: el render puede venir a 540p (mismo FOV, menos píxeles); el
+        # compositor lo escala al tamaño del frame. La mancha del centro del
+        # render 960x540 cae en el centro del frame 1280x720.
+        comp = Compositor(ancho=ANCHO, alto=ALTO, borde_suave=0.0)
+        cielo = np.zeros((540, 960, 3), dtype=np.uint8)
+        cielo[270 - 4:270 + 5, 480 - 4:480 + 5] = (0, 255, 0)
+        salida = comp.compone(self.frame, cielo, QUAD)
+        np.testing.assert_array_equal(salida[ALTO // 2, ANCHO // 2], (0, 255, 0))
+        # El resto del frame fuera del marco sigue intacto.
+        np.testing.assert_array_equal(salida[10, 10], self.frame[10, 10])
+
+    def test_modo_completo_con_cielo_reducido_no_rompe(self):
+        # El warp "completo" también acepta un cielo a menor resolución.
+        comp = Compositor(ancho=ANCHO, alto=ALTO, borde_suave=0.0,
+                          modo="completo")
+        cielo = np.zeros((360, 640, 3), dtype=np.uint8)
+        cielo[180 - 4:180 + 5, 320 - 4:320 + 5] = (0, 255, 0)
+        salida = comp.compone(self.frame, cielo, QUAD)
+        self.assertEqual(salida.shape, (ALTO, ANCHO, 3))
+        region = salida[ALTO // 2 - 5:ALTO // 2 + 6, ANCHO // 2 - 5:ANCHO // 2 + 6]
+        verde_puro = (region[:, :, 1] == 255) & (region[:, :, 0] == 0)
+        self.assertTrue(bool(verde_puro.any()),
+                        "la mancha del centro debería verse en el marco")
+
     def test_sin_marco_devuelve_el_frame(self):
         salida = self.compositor.compone(self.frame, self.cielo, None)
         self.assertIs(salida, self.frame)

@@ -155,5 +155,10 @@ def cargar_estrellas(ruta: Path | str = RUTA_CATALOGO,
     """
     if formato != "bsc":
         raise ValueError(f"Formato de catálogo no soportado: {formato!r}")
-    texto = Path(ruta).read_text(encoding="latin-1")
+    ruta = Path(ruta)
+    if not ruta.exists():
+        raise FileNotFoundError(
+            f"Catálogo de estrellas no encontrado: {ruta}. "
+            "Ejecuta: python tools/download_models.py")
+    texto = ruta.read_text(encoding="latin-1")
     return Catalogo(_parsear_bsc(texto, mag_limite))
