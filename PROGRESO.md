@@ -5,7 +5,7 @@ es el punto de retoma para la próxima sesión.
 
 ## Estado actual (2026-08-11)
 
-**Última fase completada: Fase 9 — Modos de gesto conectados al render (L sin nombres, MANO_COMPLETA con nombres).**
+**Última fase completada: Fase 9 — Modos de gesto conectados al render (L sin nombres, MANO_COMPLETA con nombres), validada por el usuario.**
 95/95 tests en verde. Working tree limpio.
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
@@ -197,12 +197,12 @@ es el punto de retoma para la próxima sesión.
   - Capturas de referencia sintéticas guardadas en `docs/capturas-fase8/`
     (cielo warpeado dentro de un cuadrilátero perspectivo con el fondo
     intacto).
-  - **Fase 9 — Conexión gesto→render (2026-08-11):** las etiquetas siguen al
-    gesto. `handtracking.gesture.etiquetas_segun_gesto(modo, prev)` codifica la
-    semántica validada por Matheus: el modo **L muestra el cielo sin nombres**
-    y el **MANO_COMPLETA con los nombres** de los astros más importantes;
-    NINGUNO (manos perdidas o debounce) conserva el valor anterior para no
-    parpadear. La demo la usa por defecto; la tecla `n` cicla entre
+  - **Fase 9 — Conexión gesto→render (2026-08-11, VALIDADA por Matheus):** las
+    etiquetas siguen al gesto. `handtracking.gesture.etiquetas_segun_gesto(modo, prev)`
+    codifica la semántica validada por Matheus: el modo **L muestra el cielo sin
+    nombres** y el **MANO_COMPLETA con los nombres** de los astros más
+    importantes; NINGUNO (manos perdidas o debounce) conserva el valor anterior
+    para no parpadear. La demo la usa por defecto; la tecla `n` cicla entre
     `auto` (según gesto) / `siempre sí` / `siempre no` (flags
     `--etiquetas-auto` (def.) / `--etiquetas` / `--no-etiquetas`). El OSD
     muestra el modo y el valor efectivo (`etiquetas: auto (sí)`).
@@ -249,7 +249,7 @@ es el punto de retoma para la próxima sesión.
 | 6 | Astrometría | Hecho (validado por el usuario vs Stellarium) |
 | 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |
 | 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
-| 9 | Modos de gesto | Hecho (implementado; pendiente validación visual) |
+| 9 | Modos de gesto | Hecho (validado por el usuario) |
 | 10 | Optimización y robustez | Pendiente |
 | 11 | Integración final y prueba de usuario | Pendiente |
 
