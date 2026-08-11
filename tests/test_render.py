@@ -57,8 +57,11 @@ class TestRender(unittest.TestCase):
                            "el cielo debe tener estrellas visibles")
 
     def test_render_apuntando_al_suelo_es_negro(self):
-        # inclinacion -90 mira hacia el nadir; no debería haber estrellas.
-        img = self.renderer.render(_t(), rumbo=180.0, inclinacion=-90.0)
+        # inclinacion -90 mira hacia el nadir; sin estética no hay estrellas
+        # ni fondo, así que la imagen queda completamente negra.
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
+                               estetica="plano")
+        img = renderer.render(_t(), rumbo=180.0, inclinacion=-90.0)
         self.assertEqual(np.count_nonzero(img), 0)
 
     def test_proyeccion_centro(self):
@@ -87,6 +90,15 @@ class TestRender(unittest.TestCase):
     def test_nombres_propios_tiene_sirio(self):
         self.assertEqual(NOMBRES_PROPIOS.get("Alp CMa"), "Sirio")
 
+    def test_etiquetas_resuelven_nombres_bsc(self):
+        # El BSC guarda "9Alp CMa"; el render debe resolverlo a "Sirio" (HR 2491)
+        # y "58Alp Ori" a "Betelgeuse" (HR 2061), no quedarse sin etiqueta.
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        nombres = renderer._nombres_por_indice
+        self.assertEqual(nombres.get(2491), "Sirio")
+        self.assertEqual(nombres.get(2061), "Betelgeuse")
+        self.assertEqual(nombres.get(7001), "Vega")
+
     def test_brillo_factor_aumenta_estrellas(self):
         base = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0, brillo_factor=1.0)
         brillante = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
@@ -105,6 +117,44 @@ class TestRender(unittest.TestCase):
         renderer.brillo_factor = 2.5
         img_alto = renderer.render(t, 180.0, 45.0)
         self.assertGreater(int(img_alto.sum()), int(img_bajo.sum()))
+
+    def test_estetica_por_defecto_es_noche_profunda(self):
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        self.assertEqual(renderer.estetica, "noche_profunda")
+
+    def test_estetica_por_defecto_pinta_fondo_degradado(self):
+        # Mirando al suelo no hay estrellas, pero la estética por defecto
+        # pinta igualmente el degradado azul noche como fondo.
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        img = renderer.render(_t(), rumbo=180.0, inclinacion=-90.0)
+        self.assertGreater(np.count_nonzero(img), 0,
+                           "el degradado de fondo debe verse")
+        # El degradado va de un azul más claro (arriba) a uno más oscuro
+        # (abajo), como en el cielo nocturno real.
+        self.assertGreater(float(img[0].mean()), float(img[-1].mean()))
+
+    def test_estetica_noche_profunda_resalta_el_cielo(self):
+        plano_r = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
+                              estetica="plano")
+        profundo_r = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        t = _t()
+        img_plano = plano_r.render(t, 180.0, 45.0)
+        img_profundo = profundo_r.render(t, 180.0, 45.0)
+        # Fondo + resplandor de las estrellas añaden luz visible.
+        self.assertGreater(int(img_profundo.sum()), int(img_plano.sum()))
+
+    def test_estetica_invalida_lanza(self):
+        with self.assertRaises(ValueError):
+            SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
+                        estetica="no-existe")
+
+    def test_estetica_cambiable_en_caliente(self):
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        t = _t()
+        img_profundo = renderer.render(t, 180.0, 45.0)
+        renderer.estetica = "plano"
+        img_plano = renderer.render(t, 180.0, 45.0)
+        self.assertEqual(int(img_profundo.sum()) >= int(img_plano.sum()), True)
 
 
 @unittest.skipUnless(RUTA_EFEMERIDES.exists(),

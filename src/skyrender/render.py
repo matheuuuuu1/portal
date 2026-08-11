@@ -9,6 +9,8 @@ J2000 hasta píxeles de una imagen, todo vectorizado con numpy:
 3. **Matriz de vista de cámara** a partir de {rumbo, inclinacion, roll}.
 4. **Proyección** perspectiva (FOV configurable) y dibujo de puntos según
    la magnitud, líneas de constelaciones, planetas (de421.bsp) y etiquetas.
+5. **Estética** de post-proceso (degradado azul noche + resplandor en las
+   estrellas brillantes), configurable con `estetica` (ver `estetica.py`).
 
 El coste por frame es la proyección de los ~8.400 vectores (una
 multiplicación de matrices) más el dibujo; los planetas se recalculan con
@@ -30,6 +32,7 @@ from .astro import (RUTA_EFEMERIDES, Ubicacion, aplicar_matriz,
                     matriz_vista_camara, precesionar_vectores_j2000)
 from .catalogo import RUTA_CATALOGO, Catalogo, cargar_estrellas
 from .constelaciones import segmentos
+from .estetica import ESTETICAS, aplicar, fondo_noche_profunda
 
 # Nombres propios de las estrellas más brillantes. El campo Name del BSC
 # solo lleva la designación Bayer/Flamsteed, así que el nombre común se
@@ -74,6 +77,7 @@ class SkyRenderer:
                  alto: int = 720,
                  fov_deg: float = 60.0,
                  brillo_factor: float = 2.5,
+                 estetica: str = "noche_profunda",
                  ruta_catalogo: Path | str = RUTA_CATALOGO,
                  ruta_efemerides: Path | str = RUTA_EFEMERIDES) -> None:
         self.catalogo = catalogo or cargar_estrellas(ruta_catalogo)
@@ -83,6 +87,12 @@ class SkyRenderer:
         self.alto = alto
         self.fov_deg = fov_deg
         self.brillo_factor = brillo_factor
+        if estetica not in ESTETICAS:
+            raise ValueError(
+                f"Estética desconocida: {estetica!r}. "
+                f"Disponibles: {', '.join(sorted(ESTETICAS))}.")
+        self.estetica = estetica
+        self._fondo_est: Optional[np.ndarray] = None   # degradado, bajo demanda
 
         # Proyección perspectiva (píxeles cuadrados).
         f = (ancho / 2.0) / math.tan(math.radians(fov_deg) / 2.0)
@@ -104,7 +114,15 @@ class SkyRenderer:
             for ea, eb in segmentos(self.catalogo)]
         self._nombres_por_indice: dict[int, str] = {}
         for e in self.catalogo.estrellas:
-            clave = e.nombre.split()[-1] if e.nombre else ""
+            # El nombre del BSC es "9Alp CMa" (número Flamsteed + Bayer +
+            # constelación). Se quita el número y se deja "Alp CMa" para casar
+            # con las claves de NOMBRES_PROPIOS (el último token por sí solo
+            # sería "CMa", que no coincide).
+            tokens = e.nombre.split()
+            if not tokens:
+                continue
+            bayer = tokens[0].lstrip("0123456789 ")
+            clave = (bayer + " " + " ".join(tokens[1:])).strip()
             propio = NOMBRES_PROPIOS.get(clave, "")
             if propio:
                 self._nombres_por_indice[e.id] = propio
@@ -164,6 +182,13 @@ class SkyRenderer:
         u = self._cx + self._fx * v_cam[:, 0] / z
         v = self._cy - self._fy * v_cam[:, 1] / z
         return u, v
+
+    def _fondo_estetica(self) -> np.ndarray:
+        """Degradado de fondo de la estética en uint8, creado una sola vez."""
+        if self._fondo_est is None:
+            f = fondo_noche_profunda(self.ancho, self.alto)
+            self._fondo_est = np.clip(f, 0, 255).astype(np.uint8)
+        return self._fondo_est
 
     # ------------------------------------------------------------------
     # Dibujo
@@ -259,4 +284,8 @@ class SkyRenderer:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                             _COLOR_ETIQUETA, 1, cv2.LINE_AA)
 
-        return img
+        # Estética de post-proceso (fondo + resplandor). La estética "plano"
+        # devuelve la imagen sin cambios, así que no se calcula el fondo.
+        return aplicar(img, self.estetica,
+                       self._fondo_estetica() if self.estetica != "plano"
+                       else None)

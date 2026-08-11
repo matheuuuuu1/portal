@@ -3,7 +3,10 @@
 Seguimiento de la implementación del `PLAN.md`. La entrada de "Estado actual"
 es el punto de retoma para la próxima sesión.
 
-## Estado actual (2026-08-10)
+## Estado actual (2026-08-11)
+
+**Última fase completada: Fase 8 — Composición (validada por el usuario) + estética "noche profunda".**
+85/85 tests en verde. Working tree limpio.
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
   - Repositorio git inicializado (rama `main`); primer commit realizado.
@@ -151,6 +154,66 @@ es el punto de retoma para la próxima sesión.
   - **Validación de Matheus (2026-08-10):** probó la demo interactiva y aprobó
     el aspecto del cielo con brillo 2.5 → validado visualmente.
 
+- **Fase 8 — Composición: COMPLETADA y VALIDADA por el usuario.**
+  - `src/compositor/compositor.py`: clase `Compositor` que toma el frame de
+    cámara (BGR 1280x720), la imagen del cielo (BGR 1280x720) y el
+    cuadrilátero normalizado (4 esquinas TL/TR/BR/BL en [0,1]). Calcula la
+    homografía con `cv2.getPerspectiveTransform` desde las esquinas de la
+    imagen del cielo hacia el cuadrilátero en píxeles, aplica
+    `cv2.warpPerspective`, y mezcla el cielo dentro del marco con blending
+    uint8 por canal (`cv2.multiply` + `cv2.add`). El resto del frame
+    permanece byte a byte intacto. Incluye `borde_suave` configurable (2px
+    por defecto) que difumina la máscara gaussiano para que el borde no sea
+    duro. Valida defensa con `polygon_area` de `handtracking` (no invierte
+    cuadriláteros degenerados, devuelve el frame sin cambios).
+  - Rendimiento medido: **~7 ms por composición (~145 FPS)**, ciclo completo
+    render + composición **~9 ms (~109 FPS)**. La optimización clave fue
+    reemplazar el blending float32 + indexing booleano de numpy (~35 ms) por
+    `cv2.multiply` con máscara uint8 (~7 ms).
+  - `src/compositor/demo_compositor.py`: demo en tiempo real que une cámara
+    (`CameraCapture`), manos (`HandPipeline`), cielo (`SkyRenderer`) y
+    compositor. Orientación por teclado (flechas) por defecto; con
+    `--brujula URL` lee el servidor de brújula vía `/estado` en un hilo
+    (polling cada 250ms, soporte HTTPS auto-firmado sin verificación). La URL
+    debe ser `https://` (el servidor es solo TLS; con `http://` la conexión se
+    rechaza en silencio). Teclas: ←→ rumbo, ↑↓ inclinación, [ ] brillo, n
+    alternar etiquetas, r reiniciar, q/ESC salir. Muestra FPS, modo de gesto
+    y aviso "SIN MARCO" cuando no hay manos.
+  - **Correcciones (2026-08-10, reportadas por el usuario):** (1) el nombre
+    del BSC ("9Alp CMa") no casaba con las claves de NOMBRES_PROPIOS porque el
+    render tomaba solo el último token ("CMa") → las etiquetas de estrellas no
+    aparecían nunca; ahora se quita el número Flamsteed y se deja "Alp CMa".
+    (2) El flag de la demo se renombró a `--brujula` (antes `--brjula`,
+    mal escrito) y la URL documentada pasó a `https://` con aviso si se usa
+    `http://`. (3) El `fresh` del servidor comparaba el `ts` del celular
+    (reloj del cliente) contra el reloj del servidor: si los relojes no están
+    sincronizados, `/estado` devolvía `fresh:false` siempre y la demo nunca
+    usaba la brújula aunque el polling llegara (200); el panel de la Fase 3 sí
+    se movía porque usa `/monitor` (no `fresh`). Ahora `fresh` mide con el
+    reloj del servidor cuándo se RECIBIÓ la última lectura. Tests añadidos →
+    suite completa en **80/80 en verde**.
+  - `tests/test_compositor.py`: **13 tests** (homografía, warp, intéridad del
+    frame fuera del marco, degeneración, borde suave, rendimiento). En verde.
+  - Capturas de referencia sintéticas guardadas en `docs/capturas-fase8/`
+    (cielo warpeado dentro de un cuadrilátero perspectivo con el fondo
+    intacto).
+  - **Conexión gesto→render (etiquetas según modo L/MANO_COMPLETA) es la
+    Fase 9 del PLAN; la demo controla las etiquetas con la tecla n.**
+  - **Estética "noche profunda" integrada (2026-08-11):** nuevo módulo
+    `skyrender/estetica.py` con post-proceso de diseño (degradado azul
+    noche + resplandor blanco-azulado en las estrellas brillantes) que se
+    aplica al final de `SkyRenderer.render()`. Elegida por Matheus de
+    entre 4 propuestas generadas con `tools/previews_estetica.py`
+    (capturas en `docs/previews/`). Configurable en construcción
+    (`SkyRenderer(estetica=...)`, def. "noche_profunda"), en caliente
+    (`renderer.estetica`) y desde la demo (`--estetica` o tecla `e`).
+    La estética es post-proceso: **no altera la posición de los astros**
+    (la validación de astrometría sigue siendo válida). Optimizada para
+    tiempo real (el resplandor se difumina a 1/4 de resolución y el fondo
+    se suma en uint8): render a ~19 ms/frame (~52 fps) con la estética;
+    la demo queda muy por encima de los 30 fps del ADR-007.
+  - **Suite completa: 85/85 tests en verde** (4 tests nuevos de estética).
+
 ## Historial de fases
 
 | Fase | Descripción | Estado |
@@ -163,7 +226,7 @@ es el punto de retoma para la próxima sesión.
 | 5 | Calibración | Hecho (validado por el usuario) |
 | 6 | Astrometría | Hecho (validado por el usuario vs Stellarium) |
 | 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |
-| 8 | Composición | Pendiente |
+| 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
 | 9 | Modos de gesto | Pendiente |
 | 10 | Optimización y robustez | Pendiente |
 | 11 | Integración final y prueba de usuario | Pendiente |

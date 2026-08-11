@@ -79,8 +79,13 @@ class TestCompassState(unittest.TestCase):
         copia.rumbo = 999.0
         self.assertEqual(self.st.get().rumbo, 90.0)
 
-    def test_fresh_con_lectura_antigua(self):
+    def test_fresh_mide_la_recepcion_no_el_ts_del_celular(self):
+        # Aunque el celular mande un ts viejo (reloj sin sincronizar), si la
+        # lectura se recibió ahora, es fresh.
         self.st.update(Orientacion(rumbo=0.0, ts=time.time() - 30.0))
+        self.assertTrue(self.st.fresh)
+        # Simula que no llegan datos hace rato: fresh se vuelve falso.
+        self.st._ultima_lectura = time.time() - 30.0
         self.assertFalse(self.st.fresh)
 
     def test_calibrar_hace_cero_el_rumbo_actual(self):

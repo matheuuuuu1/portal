@@ -102,6 +102,7 @@ class CompassState:
         self._cruda = Orientacion()  # última lectura del celular, sin offset
         self._orientacion = Orientacion()
         self._offset_rumbo = 0.0
+        self._ultima_lectura = 0.0   # reloj del servidor (no el ts del celular)
         self._ruta_calibracion = ruta_calibracion
         self._cargar_offset()
 
@@ -143,6 +144,7 @@ class CompassState:
         with self._lock:
             self._cruda = orientacion
             self._orientacion = self._aplicar_offset(orientacion)
+            self._ultima_lectura = time.time()  # reloj del servidor
 
     def calibrar(self, rumbo: float) -> float:
         """Declara que el rumbo actual del celular es el norte (0)."""
@@ -164,5 +166,11 @@ class CompassState:
 
     @property
     def fresh(self) -> bool:
-        """True si la última lectura es reciente (el celular está conectado)."""
-        return (time.time() - self.get().ts) < STALE_TIMEOUT
+        """True si la última lectura se recibió hace poco (celular conectado).
+
+        Se mide con el reloj del servidor (cuándo se RECIBIÓ), no con el
+        `ts` que manda el celular: si los relojes no están sincronizados, el
+        `ts` del cliente daría "obsoleto" siempre aunque el celular envíe
+        en vivo.
+        """
+        return (time.time() - self._ultima_lectura) < STALE_TIMEOUT
