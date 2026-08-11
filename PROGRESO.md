@@ -7,7 +7,9 @@ es el punto de retoma para la próxima sesión.
 
 **Última fase completada: Fase 11 — Integración final.** Punto de entrada
 único (`portal`), flujo guiado en terminal, docs actualizadas.
-**105/105 tests en verde.**
+**116/116 tests en verde.**
+Extras post-Fase 11: tecla `i` (panel completo de información) y cámara
+espejada por defecto (`--no-espejo` para la imagen cruda).
 *Pendiente: prueba de usuario completa (Matheus completa el flujo de principio
 a fin sin intervención del desarrollador).*
 
@@ -303,6 +305,15 @@ a fin sin intervención del desarrollador).*
   - **Docs actualizadas:** README.md con el comando `portal` y la sección
     "Flujo de uso"; `docs/configuracion-celular.md` actualizada en las
     secciones 1.6 y 2.2 para mencionar `portal`.
+  - **Extras de la demo (post-Fase 11, pedidos por el usuario):**
+    - Tecla **`i`**: panel semitransparente con toda la información en
+      pantalla (FPS, orientación, gesto, etiquetas, estética, marco, brillo,
+      resoluciones, ubicación, estado de la brújula y espejo).
+    - **Cámara espejada por defecto** (modo selfie): la mano derecha sale a
+      la derecha de la imagen. El cielo se voltea junto con la escena para
+      que el portal se mantenga coherente; el medidor corrige la coordenada
+      X con el espejo. Se desactiva con `--no-espejo`.
+    - Tests: **116/116 en verde** (11 nuevos en `tests/test_demo_extra.py`).
 
 ## Historial de fases
 

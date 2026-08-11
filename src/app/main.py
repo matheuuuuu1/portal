@@ -155,7 +155,7 @@ def main(argv=None) -> int:
     print("  4. Forma una ventana con ambas manos para ver el cielo")
     print()
     print("  Flechas: rumbo/inclinacion | n: etiquetas | e: estetica")
-    print("  q/ESC: salir")
+    print("  i: panel de info | c: medidor | m: modo | q/ESC: salir")
     print()
     print("=" * 60)
     print()

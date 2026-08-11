@@ -55,7 +55,28 @@ python -m compositor.demo_compositor
 5. Forma una ventana con ambas manos (pulgar + índice de cada mano).
 6. El cielo estrellado real aparece dentro del marco — gira para explorar.
 7. **L** (pulgar + índice): sin nombres. **Mano completa**: con nombres.
-8. q o ESC para salir.
+8. `i` muestra un panel con toda la información en pantalla.
+9. q o ESC para salir.
+
+La cámara se muestra **espejada** por defecto (modo selfie): tu mano
+derecha sale a la derecha de la imagen, como en un espejo. El cielo se
+voltea junto con la escena para que el portal se mantenga coherente. Para
+la imagen cruda de la cámara usa `portal --no-espejo`.
+
+### Teclas dentro de la ventana
+
+| Tecla | Acción |
+|---|---|
+| ← / a, → / d | rumbo (izquierda / derecha) |
+| ↑ / w, ↓ / s | inclinación (arriba / abajo) |
+| [ / ] | brillo de las estrellas |
+| n | modo de etiquetas: auto (según gesto) → siempre sí → siempre no |
+| e | estética del cielo (plano / noche profunda) |
+| m | modo del marco (ventana / completo) |
+| c | medidor de coordenadas bajo el cursor |
+| **i** | panel completo de información (FPS, orientación, gesto, etiquetas, estética, marco, brillo, resoluciones, ubicación, brújula) |
+| r | devolver rumbo/inclinación a los iniciales |
+| q / ESC | salir |
 
 ## Estructura del proyecto
 

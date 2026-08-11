@@ -28,8 +28,16 @@ Teclas dentro de la ventana:
 - m: cambiar el modo del marco (ventana recorta el cielo anclado /
   completo comprime todo el FOV en el marco).
 - c: mostrar/ocultar el medidor (rumbo y altitud exactos bajo el cursor).
+- i: mostrar/ocultar el panel completo de información (FPS, orientación,
+  gesto, etiquetas, estética, marco, brillo, resoluciones, ubicación,
+  estado de la brújula y si la cámara está espejada).
 - r: devolver el rumbo/inclinación a los iniciales.
 - q / ESC: salir.
+
+La cámara se muestra **espejada por defecto** (modo selfie): la mano
+derecha sale a la derecha de la imagen, igual que en un espejo. El cielo
+se voltea junto con la escena para que el portal se mantenga coherente.
+Con `--no-espejo` se muestra la imagen cruda de la cámara.
 
 Fase 9: las etiquetas siguen al gesto — el modo L muestra el cielo sin
 nombres y el modo MANO_COMPLETA con los nombres de los astros más
@@ -102,6 +110,78 @@ def _dibujar_medidor(img: np.ndarray, x: int, y: int,
                 color, 1, cv2.LINE_AA)
 
 
+def espejar(img: np.ndarray, activo: bool) -> np.ndarray:
+    """Voltea la imagen horizontalmente si `activo` (modo selfie).
+
+    Con el espejo, la mano derecha sale a la derecha de la pantalla (como
+    en un espejo). Se aplica a la imagen ya compuesta, así el cielo y el
+    marco se voltean junto con la escena y el portal se mantiene coherente.
+    """
+    return cv2.flip(img, 1) if activo else img
+
+
+_COLOR_PANEL = (235, 235, 235)
+
+
+def _dibujar_panel_info(img: np.ndarray, lineas: list[str],
+                        x: int = 12, y: int = 12) -> None:
+    """Panel semitransparente con las líneas de información (tecla i).
+
+    Dibuja un rectángulo oscuro translúcido en la esquina superior
+    izquierda y las líneas de texto encima. No modifica dimensiones ni tipo.
+    """
+    if not lineas:
+        return
+    fuente = cv2.FONT_HERSHEY_SIMPLEX
+    escala, grosor = 0.5, 1
+    inter = 18
+    pad_x, pad_y = 10, 8
+    ancho_max = max(cv2.getTextSize(l, fuente, escala, grosor)[0][0]
+                    for l in lineas)
+    x0, y0 = x, y
+    x1 = x0 + ancho_max + 2 * pad_x
+    y1 = y0 + pad_y + len(lineas) * inter + pad_y
+    overlay = img.copy()
+    cv2.rectangle(overlay, (x0, y0), (x1, y1), (18, 22, 36), -1)
+    cv2.addWeighted(overlay, 0.55, img, 0.45, 0, img)
+    for i, linea in enumerate(lineas):
+        cv2.putText(img, linea, (x0 + pad_x, y0 + pad_y + i * inter + 12),
+                    fuente, escala, _COLOR_PANEL, grosor, cv2.LINE_AA)
+
+
+def _lineas_info(fps, rumbo, inclinacion, roll, hand_frame, etq_label,
+                 renderer, compositor, brillo, args, ubicacion,
+                 brujula) -> list[str]:
+    """Líneas de texto del panel completo (tecla i)."""
+    lineas = [
+        f"FPS: {fps:5.1f}   rumbo {rumbo:6.1f}   incl {inclinacion:5.1f}"
+        f"   roll {roll:+5.1f}",
+        f"gesto: {hand_frame.mode}   etiquetas: {etq_label}",
+        f"estética: {renderer.estetica}   marco: {compositor.modo}"
+        f"   brillo: {brillo:.2f}",
+        f"borde suave: {args.borde_suave} px   render:"
+        f" {renderer.ancho}x{renderer.alto}   frame:"
+        f" {compositor.ancho}x{compositor.alto}",
+        f"ubicación: {ubicacion.nombre}"
+        f" (lat {ubicacion.lat:.4f}, lon {ubicacion.lon:.4f})",
+        f"espejo: {'sí' if args.espejo else 'no'}",
+    ]
+    if brujula is not None:
+        edad = brujula.edad()
+        if edad is None:
+            estado = "sin lectura"
+        elif edad < 3.0:
+            estado = f"fresca (hace {edad:.1f} s)"
+        else:
+            estado = f"caduca (hace {edad:.1f} s)"
+        lineas.append(f"brújula: {brujula.url} — {estado}")
+    else:
+        lineas.append("brújula: sin servidor (teclado)")
+    if not hand_frame.valid:
+        lineas.append("SIN MARCO: forma una ventana con ambas manos")
+    return lineas
+
+
 class CompassReader(threading.Thread):
     """Lee `/estado` del servidor de la brújula en un hilo (sin bloquear).
 
@@ -138,6 +218,12 @@ class CompassReader(threading.Thread):
 
     def detener(self) -> None:
         self._stop = True
+
+    def edad(self) -> float | None:
+        """Segundos desde la última lectura fresca (None si nunca llegó)."""
+        if self._estado is None:
+            return None
+        return time.time() - self._ts
 
     def orientacion(self) -> tuple | None:
         """(rumbo, inclinacion, roll) o None si no hay lectura fresca reciente."""
@@ -208,6 +294,12 @@ def run(argv=None) -> int:
                         help="ancho del render del cielo (def. 960 = 540p)")
     parser.add_argument("--render-alto", type=int, default=540,
                         help="alto del render del cielo (def. 540 = 540p)")
+    parser.add_argument("--espejo", dest="espejo", action="store_true",
+                        default=True,
+                        help="espejar la cámara (modo selfie: la mano derecha "
+                             "sale a la derecha; def. sí)")
+    parser.add_argument("--no-espejo", dest="espejo", action="store_false",
+                        help="mostrar la imagen cruda de la cámara sin espejo")
     args = parser.parse_args(argv)
 
     ubicacion = _ubicacion(args, aviso=True)
@@ -229,6 +321,7 @@ def run(argv=None) -> int:
     roll = 0.0
     etiquetas = False   # valor efectivo; en "auto" lo decide el gesto (F9)
     brillo = args.brillo
+    mostrar_info = False   # panel completo de información (tecla i)
 
     # El cielo se renderiza a 540p por defecto (Fase 10, mitigación del
     # ADR-007) y el compositor lo escala al tamaño del frame; ahorra ~7 ms.
@@ -250,10 +343,12 @@ def run(argv=None) -> int:
 
     print("Fase 8/9 — Composición. Flechas: rumbo/inclinación. "
           "[ / ]: brillo. n: etiquetas (auto/sí/no). e: estética. "
-          "m: modo del marco. c: medidor del cursor. r: reiniciar. "
-          "q/ESC: salir.")
+          "m: modo del marco. c: medidor del cursor. i: panel de info. "
+          "r: reiniciar. q/ESC: salir.")
     print(f"Render del cielo: {renderer.ancho}x{renderer.alto} "
           f"(el frame es {compositor.ancho}x{compositor.alto}).")
+    print("Cámara: " + ("espejada (modo selfie: la mano derecha sale a la "
+                        "derecha)." if args.espejo else "sin espejo."))
 
     with CameraCapture(index=args.camera).open() as cam:
         try:
@@ -305,25 +400,39 @@ def run(argv=None) -> int:
                 else:
                     salida = frame
 
+                # --- espejo (modo selfie): se voltea la imagen ya compuesta,
+                # así el cielo y el marco se voltean junto con la escena ---
+                salida = espejar(salida, args.espejo)
+
                 # --- OSD ---
                 fps = tick(time.perf_counter())
-                cv2.putText(salida, f"FPS: {fps:5.1f}  rumbo {rumbo:6.1f}  "
-                                    f"incl {inclinacion:5.1f}",
-                            (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                            (0, 255, 0), 1, cv2.LINE_AA)
                 if args.etiquetas_modo == "auto":
                     etq_label = f"auto ({'sí' if etiquetas else 'no'})"
                 else:
                     etq_label = "sí" if etiquetas else "no"
-                modo = (f"MODO: {hand_frame.mode}   etiquetas: {etq_label}   "
-                        f"estética: {renderer.estetica}   "
-                        f"marco: {compositor.modo}")
-                if not hand_frame.valid:
-                    modo += "   [SIN MARCO: forma una ventana con ambas manos]"
-                cv2.putText(salida, modo, (10, 54),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                            (0, 255, 0) if hand_frame.valid else (0, 0, 255),
-                            1, cv2.LINE_AA)
+                if mostrar_info:
+                    _dibujar_panel_info(
+                        salida, _lineas_info(
+                            fps, rumbo, inclinacion, roll, hand_frame,
+                            etq_label, renderer, compositor, brillo, args,
+                            ubicacion, brujula))
+                else:
+                    cv2.putText(salida,
+                                f"FPS: {fps:5.1f}  rumbo {rumbo:6.1f}  "
+                                f"incl {inclinacion:5.1f}",
+                                (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (0, 255, 0), 1, cv2.LINE_AA)
+                    modo = (f"MODO: {hand_frame.mode}   "
+                            f"etiquetas: {etq_label}   "
+                            f"estética: {renderer.estetica}   "
+                            f"marco: {compositor.modo}")
+                    if not hand_frame.valid:
+                        modo += ("   [SIN MARCO: forma una ventana "
+                                 "con ambas manos]")
+                    cv2.putText(salida, modo, (10, 54),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (0, 255, 0) if hand_frame.valid else (0, 0, 255),
+                                1, cv2.LINE_AA)
 
                 # --- medidor: rumbo/alt exactos del punto bajo el cursor ---
                 if args.medidor and cursor["x"] >= 0:
@@ -331,6 +440,10 @@ def run(argv=None) -> int:
                     # (540p): se escalan las coordenadas del cursor.
                     rx = cursor["x"] * escala_medidor[0]
                     ry = cursor["y"] * escala_medidor[1]
+                    # Con el espejo, el píxel que ve el cursor en la imagen
+                    # volteada corresponde al espejado del render.
+                    if args.espejo:
+                        rx = renderer.ancho - 1 - rx
                     az, alt = renderer.altaz_del_pixel(
                         rx, ry, rumbo % 360.0, inclinacion, roll)
                     _dibujar_medidor(salida, cursor["x"], cursor["y"], az, alt)
@@ -377,6 +490,10 @@ def run(argv=None) -> int:
                     i = (nombres.index(compositor.modo) + 1) % len(nombres)
                     compositor.modo = nombres[i]
                     print(f"Modo del marco: {compositor.modo}")
+                elif tecla == ord("i"):
+                    mostrar_info = not mostrar_info
+                    print("Panel de información: "
+                          f"{'mostrando' if mostrar_info else 'oculto'}")
                 elif tecla == ord("r"):
                     rumbo, inclinacion = base
         finally:
