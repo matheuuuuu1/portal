@@ -11,8 +11,10 @@ es el punto de retoma para la próxima sesión.
 Extras post-Fase 11: tecla `i` (panel completo de información), cámara
 espejada por defecto (`--no-espejo` para la imagen cruda) y lista de objetos
 visibles con apuntado por teclado (tecla `o`, números 1-9/0).
-*Pendiente: prueba de usuario completa (Matheus completa el flujo de principio
-a fin sin intervención del desarrollador).*
+**Prueba de usuario completa superada (2026-08-11):** Matheus corrió
+`portal` de principio a fin — servidor, celular calibrado, ventana con las
+manos, cielo en el marco y teclas de la demo — sin intervención del
+desarrollador.
 
 - **Fase 0 — Infraestructura y entorno: COMPLETADA.**
   - Repositorio git inicializado (rama `main`); primer commit realizado.
@@ -342,7 +344,7 @@ a fin sin intervención del desarrollador).*
 | 8 | Composición | Hecho (validado por el usuario; estética "noche profunda" integrada) |
 | 9 | Modos de gesto | Hecho (validado por el usuario) |
 | 10 | Optimización y robustez | Hecho (validado: 27 FPS Iris Xe con cámara real) |
-| 11 | Integración final y prueba de usuario | Hecho (pendiente validación de usuario) |
+| 11 | Integración final y prueba de usuario | Hecho (validado por el usuario) |
 
 ## Notas de implementación
 
