@@ -106,3 +106,18 @@ def mode_for_hands(hands: List[HandData]) -> Tuple[str, List[str]]:
     if len(per_hand) == 2 and per_hand[0] == per_hand[1] and per_hand[0] != MODO_NINGUNO:
         return per_hand[0], per_hand
     return MODO_NINGUNO, per_hand
+
+
+def etiquetas_segun_gesto(modo: str, prev: bool) -> bool:
+    """Etiquetas de nombres que pide el gesto (Fase 9).
+
+    MANO_COMPLETA muestra los nombres de los astros más importantes; la L los
+    oculta. Con NINGUNO (manos perdidas o modo aún inestable por el debounce)
+    se conserva el valor anterior para que las etiquetas no parpadeen al
+    entrar o salir del marco.
+    """
+    if modo == MODO_MANO_COMPLETA:
+        return True
+    if modo == MODO_L:
+        return False
+    return prev

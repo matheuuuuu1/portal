@@ -1,4 +1,4 @@
-"""Fase 8 — Demo de composición: cámara + manos + cielo dentro del marco.
+"""Fase 8/9 — Demo de composición: cámara + manos + cielo dentro del marco.
 
 Une las tres piezas ya validadas: la cámara real (`app.capture`), la
 detección del marco con las manos (`handtracking.pipeline`) y el cielo
@@ -21,7 +21,9 @@ la conexión se rechaza en silencio).
 Teclas dentro de la ventana:
 
 - ←/a →/d: rumbo.  ↑/w ↓/s: inclinación.
-- [ / ]: brillo de las estrellas.  n: alternar etiquetas de nombres.
+- [ / ]: brillo de las estrellas.
+- n: modo de etiquetas — auto (según el gesto: L sin nombres, MANO_COMPLETA
+  con nombres; por defecto) → siempre sí → siempre no.
 - e: cambiar la estética del cielo (plano / noche profunda).
 - m: cambiar el modo del marco (ventana recorta el cielo anclado /
   completo comprime todo el FOV en el marco).
@@ -29,8 +31,9 @@ Teclas dentro de la ventana:
 - r: devolver el rumbo/inclinación a los iniciales.
 - q / ESC: salir.
 
-La conexión gesto→render (mostrar nombres según el modo L/MANO_COMPLETA) es
-la Fase 9 del PLAN; aquí las etiquetas se controlan con la tecla n.
+Fase 9: las etiquetas siguen al gesto — el modo L muestra el cielo sin
+nombres y el modo MANO_COMPLETA con los nombres de los astros más
+importantes (`handtracking.gesture.etiquetas_segun_gesto`).
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ from skyfield.api import load
 
 from app.capture import CameraCapture
 from compositor.compositor import Compositor
+from handtracking.gesture import etiquetas_segun_gesto
 from handtracking.pipeline import HandPipeline
 from skyrender.astro import Ubicacion, cargar_ubicacion
 from skyrender.estetica import ESTETICAS
@@ -168,10 +172,16 @@ def run() -> int:
                         help="factor de brillo de las estrellas (def. 2.5)")
     parser.add_argument("--borde-suave", type=float, default=2.0,
                         help="píxeles de fundido en el borde del marco (def. 2)")
-    parser.add_argument("--etiquetas", action="store_true", default=True,
-                        help="mostrar nombres de los astros (por defecto)")
-    parser.add_argument("--no-etiquetas", dest="etiquetas", action="store_false",
-                        help="no mostrar nombres")
+    parser.add_argument("--etiquetas", dest="etiquetas_modo",
+                        action="store_const", const="si", default="auto",
+                        help="forzar los nombres de los astros siempre")
+    parser.add_argument("--no-etiquetas", dest="etiquetas_modo",
+                        action="store_const", const="no",
+                        help="ocultar los nombres siempre")
+    parser.add_argument("--etiquetas-auto", dest="etiquetas_modo",
+                        action="store_const", const="auto",
+                        help="nombres según el gesto: L sin nombres, "
+                             "MANO_COMPLETA con nombres (def.)")
     parser.add_argument("--medidor", dest="medidor", action="store_true",
                         default=True,
                         help="mostrar el medidor de coordenadas del punto "
@@ -213,7 +223,7 @@ def run() -> int:
     rumbo, inclinacion = args.rumbo, args.inclinacion
     base = (rumbo, inclinacion)
     roll = 0.0
-    etiquetas = args.etiquetas
+    etiquetas = False   # valor efectivo; en "auto" lo decide el gesto (F9)
     brillo = args.brillo
 
     renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=args.fov,
@@ -224,9 +234,10 @@ def run() -> int:
     ts = load.timescale()
     tick = fps_counter()
 
-    print("Fase 8 — Composición. Flechas: rumbo/inclinación. "
-          "[ / ]: brillo. n: etiquetas. e: estética. m: modo del marco. "
-          "c: medidor del cursor. r: reiniciar. q/ESC: salir.")
+    print("Fase 8/9 — Composición. Flechas: rumbo/inclinación. "
+          "[ / ]: brillo. n: etiquetas (auto/sí/no). e: estética. "
+          "m: modo del marco. c: medidor del cursor. r: reiniciar. "
+          "q/ESC: salir.")
 
     with CameraCapture(index=args.camera).open() as cam:
         pipeline = HandPipeline()
@@ -255,6 +266,15 @@ def run() -> int:
                     else:
                         roll = 0.0
 
+                # --- Fase 9: las etiquetas siguen al gesto (L sin nombres,
+                # MANO_COMPLETA con nombres); con "si"/"no" se fuerzan ---
+                if args.etiquetas_modo == "auto":
+                    etiquetas = etiquetas_segun_gesto(hand_frame.mode, etiquetas)
+                elif args.etiquetas_modo == "si":
+                    etiquetas = True
+                else:
+                    etiquetas = False
+
                 # --- cielo de esa dirección y composición ---
                 cielo = renderer.render(ts.now(), rumbo % 360.0,
                                         inclinacion, roll,
@@ -271,8 +291,11 @@ def run() -> int:
                                     f"incl {inclinacion:5.1f}",
                             (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (0, 255, 0), 1, cv2.LINE_AA)
-                modo = (f"MODO: {hand_frame.mode}   etiquetas: "
-                        f"{'SÍ' if etiquetas else 'no'}   "
+                if args.etiquetas_modo == "auto":
+                    etq_label = f"auto ({'sí' if etiquetas else 'no'})"
+                else:
+                    etq_label = "sí" if etiquetas else "no"
+                modo = (f"MODO: {hand_frame.mode}   etiquetas: {etq_label}   "
                         f"estética: {renderer.estetica}   "
                         f"marco: {compositor.modo}")
                 if not hand_frame.valid:
@@ -309,7 +332,14 @@ def run() -> int:
                     brillo = min(3.0, round(brillo + 0.1, 2))
                     renderer.brillo_factor = brillo
                 elif tecla == ord("n"):
-                    etiquetas = not etiquetas
+                    ciclo = ("auto", "si", "no")
+                    i = (ciclo.index(args.etiquetas_modo) + 1) % len(ciclo)
+                    args.etiquetas_modo = ciclo[i]
+                    desc = {"auto": "según el gesto (L sin nombres, "
+                                    "MANO_COMPLETA con nombres)",
+                            "si": "forzadas siempre sí",
+                            "no": "forzadas siempre no"}[args.etiquetas_modo]
+                    print(f"Etiquetas: {desc}")
                 elif tecla == ord("e"):
                     nombres = sorted(ESTETICAS)
                     i = (nombres.index(renderer.estetica) + 1) % len(nombres)

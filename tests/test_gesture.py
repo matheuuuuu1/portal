@@ -87,5 +87,27 @@ class TestModoGlobal(unittest.TestCase):
         self.assertEqual(modo, gesture.MODO_NINGUNO)
 
 
+class TestEtiquetasSegunGesto(unittest.TestCase):
+    """Fase 9: el gesto decide las etiquetas (L sin nombres, MC con nombres)."""
+
+    def test_mano_completa_muestra_nombres(self):
+        self.assertTrue(gesture.etiquetas_segun_gesto(
+            gesture.MODO_MANO_COMPLETA, prev=False))
+
+    def test_L_oculta_nombres(self):
+        self.assertFalse(gesture.etiquetas_segun_gesto(
+            gesture.MODO_L, prev=True))
+
+    def test_ninguno_conserva_el_valor_anterior(self):
+        self.assertTrue(gesture.etiquetas_segun_gesto(
+            gesture.MODO_NINGUNO, prev=True))
+        self.assertFalse(gesture.etiquetas_segun_gesto(
+            gesture.MODO_NINGUNO, prev=False))
+
+    def test_modo_desconocido_conserva_el_anterior(self):
+        self.assertEqual(gesture.etiquetas_segun_gesto("RARO", prev=False),
+                         False)
+
+
 if __name__ == "__main__":
     unittest.main()
