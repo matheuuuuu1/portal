@@ -220,8 +220,14 @@ es el punto de retoma para la próxima sesión.
     `Compositor(modo="completo")` (demo: `--modo` o tecla `m`) para comparar.
     Más rápido (sin warpPerspective) y físicamente más correcto: el cielo
     queda anclado a la vista de la cámara.
-  - **Suite completa: 89/89 tests en verde** (4 nuevos de estética + 4 de modo
-    ventana).
+  - **Medidor de coordenadas (2026-08-11):** como la regla de un editor de
+    imágenes, una cruz a lo ancho de la ventana señala el punto bajo el cursor
+    y una caja arriba a la derecha muestra el **rumbo y la altitud exactos**
+    del cielo que se ve en ese píxel (`SkyRenderer.altaz_del_pixel`, la
+    inversa de la proyección: `v_hor = Mᵀ·v_cam`). Útil para validar contra
+    Stellarium. Demo: tecla `c` o flag `--medidor`/`--no-medidor`.
+  - **Suite completa: 91/91 tests en verde** (2 nuevos de ida y vuelta de la
+    proyección → inversa).
 
 ## Historial de fases
 

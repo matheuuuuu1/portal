@@ -183,6 +183,31 @@ class SkyRenderer:
         v = self._cy - self._fy * v_cam[:, 1] / z
         return u, v
 
+    def altaz_del_pixel(self, u: float, v: float, rumbo: float,
+                        inclinacion: float, roll: float = 0.0
+                        ) -> tuple[float, float]:
+        """Dirección del cielo (rumbo, altitud) que cae en el píxel (u, v).
+
+        Es la inversa de `_proyectar`: dado un píxel de la imagen, devuelve el
+        (rumbo, altitud) del cielo que vería ahí la cámara apuntada con esa
+        orientación. Útil para el medidor de la demo (qué punto del cielo está
+        bajo el cursor) y para validar contra Stellarium.
+        """
+        # Rayo por el píxel en el marco de la cámara (z = adelante), normalizado.
+        x_cam = (u - self._cx) / self._fx
+        y_cam = (self._cy - v) / self._fy
+        z_cam = 1.0
+        norma = math.hypot(x_cam, math.hypot(y_cam, z_cam))
+        v_cam = np.array([x_cam / norma, y_cam / norma, z_cam / norma],
+                         dtype=np.float64)
+        # Al marco horizontal con la transpuesta (la matriz de vista es
+        # ortonormal: la inversa es su traspuesta).
+        M = matriz_vista_camara(rumbo, inclinacion, roll)
+        v_hor = M.T @ v_cam
+        alt = math.degrees(math.asin(float(np.clip(v_hor[2], -1.0, 1.0))))
+        az = math.degrees(math.atan2(v_hor[1], v_hor[0])) % 360.0
+        return az, alt
+
     def _fondo_estetica(self) -> np.ndarray:
         """Degradado de fondo de la estética en uint8, creado una sola vez."""
         if self._fondo_est is None:

@@ -25,6 +25,7 @@ Teclas dentro de la ventana:
 - e: cambiar la estética del cielo (plano / noche profunda).
 - m: cambiar el modo del marco (ventana recorta el cielo anclado /
   completo comprime todo el FOV en el marco).
+- c: mostrar/ocultar el medidor (rumbo y altitud exactos bajo el cursor).
 - r: devolver el rumbo/inclinación a los iniciales.
 - q / ESC: salir.
 
@@ -42,6 +43,7 @@ import time
 import urllib.request
 
 import cv2
+import numpy as np
 from skyfield.api import load
 
 from app.capture import CameraCapture
@@ -69,6 +71,31 @@ def fps_counter():
         return (len(ventana) - 1) / dt if dt > 0 else 0.0
 
     return tick
+
+
+_COLOR_MEDIDOR = (255, 255, 0)          # cian, BGR
+
+
+def _dibujar_medidor(img: np.ndarray, x: int, y: int,
+                     az: float, alt: float) -> None:
+    """Cruz a lo ancho de la ventana + lectura del punto bajo el cursor.
+
+    Como la regla de un editor de imágenes: las líneas señalan el punto y la
+    caja de arriba a la derecha muestra el rumbo y la altitud del cielo que se
+    ve exactamente en ese píxel (`SkyRenderer.altaz_del_pixel`).
+    """
+    color = _COLOR_MEDIDOR
+    cv2.line(img, (x, 0), (x, img.shape[0] - 1), color, 1, cv2.LINE_AA)
+    cv2.line(img, (0, y), (img.shape[1] - 1, y), color, 1, cv2.LINE_AA)
+    cv2.circle(img, (x, y), 4, color, 1, cv2.LINE_AA)
+    texto = f"rumbo {az:6.1f}°   alt {alt:+6.1f}°"
+    (tw, th), _ = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+    x0 = img.shape[1] - tw - 18
+    y0 = 14
+    cv2.rectangle(img, (x0 - 8, y0 - 4), (x0 + tw + 8, y0 + th + 8),
+                  (15, 15, 25), -1)
+    cv2.putText(img, texto, (x0, y0 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                color, 1, cv2.LINE_AA)
 
 
 class CompassReader(threading.Thread):
@@ -145,6 +172,12 @@ def run() -> int:
                         help="mostrar nombres de los astros (por defecto)")
     parser.add_argument("--no-etiquetas", dest="etiquetas", action="store_false",
                         help="no mostrar nombres")
+    parser.add_argument("--medidor", dest="medidor", action="store_true",
+                        default=True,
+                        help="mostrar el medidor de coordenadas del punto "
+                             "bajo el cursor (def. sí)")
+    parser.add_argument("--no-medidor", dest="medidor", action="store_false",
+                        help="ocultar el medidor")
     parser.add_argument("--estetica", default="noche_profunda",
                         choices=sorted(ESTETICAS),
                         help="estética del cielo (def. noche_profunda)")
@@ -193,11 +226,18 @@ def run() -> int:
 
     print("Fase 8 — Composición. Flechas: rumbo/inclinación. "
           "[ / ]: brillo. n: etiquetas. e: estética. m: modo del marco. "
-          "r: reiniciar. q/ESC: salir.")
+          "c: medidor del cursor. r: reiniciar. q/ESC: salir.")
 
     with CameraCapture(index=args.camera).open() as cam:
         pipeline = HandPipeline()
         cv2.namedWindow(WINDOW_NAME)
+        cursor = {"x": -1, "y": -1}
+
+        def on_mouse(event, x, y, flags, param):
+            if event == cv2.EVENT_MOUSEMOVE:
+                cursor["x"], cursor["y"] = x, y
+
+        cv2.setMouseCallback(WINDOW_NAME, on_mouse)
         try:
             while True:
                 frame = cam.read()
@@ -241,6 +281,14 @@ def run() -> int:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (0, 255, 0) if hand_frame.valid else (0, 0, 255),
                             1, cv2.LINE_AA)
+
+                # --- medidor: rumbo/alt exactos del punto bajo el cursor ---
+                if args.medidor and cursor["x"] >= 0:
+                    az, alt = renderer.altaz_del_pixel(
+                        cursor["x"], cursor["y"], rumbo % 360.0,
+                        inclinacion, roll)
+                    _dibujar_medidor(salida, cursor["x"], cursor["y"], az, alt)
+
                 cv2.imshow(WINDOW_NAME, salida)
 
                 tecla = cv2.waitKey(1) & 0xFF
@@ -267,6 +315,10 @@ def run() -> int:
                     i = (nombres.index(renderer.estetica) + 1) % len(nombres)
                     renderer.estetica = nombres[i]
                     print(f"Estética del cielo: {renderer.estetica}")
+                elif tecla == ord("c"):
+                    args.medidor = not args.medidor
+                    print("Medidor de coordenadas: "
+                          f"{'mostrando' if args.medidor else 'oculto'}")
                 elif tecla == ord("m"):
                     nombres = list(Compositor.MODOS)
                     i = (nombres.index(compositor.modo) + 1) % len(nombres)

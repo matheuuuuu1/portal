@@ -13,7 +13,9 @@ from datetime import datetime, timezone
 import numpy as np
 from skyfield.api import load
 
-from src.skyrender.astro import RUTA_EFEMERIDES
+from src.skyrender.astro import (RUTA_EFEMERIDES, aplicar_matriz,
+                                 altaz_desde_horizontal, lst_grados,
+                                 matriz_horizontal, matriz_vista_camara)
 from src.skyrender.catalogo import RUTA_CATALOGO, cargar_estrellas
 from src.skyrender.constelaciones import segmentos
 from src.skyrender.render import NOMBRES_PROPIOS, SkyRenderer
@@ -74,6 +76,39 @@ class TestRender(unittest.TestCase):
         self.assertAlmostEqual(u2[0], self.renderer._cx + self.renderer._fx,
                                places=6)
         self.assertAlmostEqual(v2[0], self.renderer._cy, places=6)
+
+    def test_altaz_del_centro_es_la_orientacion_de_la_camara(self):
+        # El píxel central ve exactamente el rumbo/inclinación de la cámara.
+        for rumbo, incl in ((0.0, 45.0), (180.0, 0.0), (95.0, 30.0),
+                            (350.0, 15.0)):
+            az, alt = self.renderer.altaz_del_pixel(
+                self.renderer._cx, self.renderer._cy, rumbo, incl)
+            self.assertAlmostEqual(az % 360.0, rumbo % 360.0, places=6)
+            self.assertAlmostEqual(alt, incl, places=6)
+
+    def test_altaz_del_pixel_es_inversa_de_la_proyeccion(self):
+        # Ida y vuelta: cada estrella dibujada se proyecta a un píxel y
+        # `altaz_del_pixel` debe devolver su (rumbo, altitud) reales.
+        r = self.renderer
+        t = _t()
+        rumbo, incl, roll = 180.0, 45.0, 0.0
+        M_hor = matriz_horizontal(r.ubicacion.lat,
+                                  lst_grados(r.ubicacion.lon, float(t.gast)))
+        v_hor = aplicar_matriz(M_hor, r._v_ecuatoriales_aparentes(t))
+        M_cam = matriz_vista_camara(rumbo, incl, roll)
+        v_cam = aplicar_matriz(M_cam, v_hor)
+        u, v = r._proyectar(v_cam)
+        alt_real, az_real = altaz_desde_horizontal(v_hor)
+        dibujadas = (v_hor[:, 2] > 0.0) & (v_cam[:, 2] > 0.0)
+        visibles = np.where(dibujadas)[0]
+        indices = visibles[:: max(1, len(visibles) // 40)]  # muestrea ~40
+        self.assertGreater(len(indices), 0)
+        for i in indices:
+            az, alt = r.altaz_del_pixel(float(u[i]), float(v[i]),
+                                        rumbo, incl, roll)
+            self.assertAlmostEqual(alt, float(alt_real[i]), places=4)
+            d = abs((az - float(az_real[i])) % 360.0)
+            self.assertLess(min(d, 360.0 - d), 1e-3)
 
     def test_rendimiento_objetivo(self):
         t = _t()
