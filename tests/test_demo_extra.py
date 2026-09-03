@@ -7,13 +7,15 @@ semitransparente con todas las métricas en la esquina superior izquierda.
 
 import time
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
 
 from compositor.compositor import Compositor
 from compositor.demo_compositor import (CompassReader, _dibujar_panel_info,
-                                        espejar)
+                                        _ubicacion, espejar)
 
 
 def _frame_simple(ancho=320, alto=240):
@@ -135,6 +137,59 @@ class TestCompassReaderEdad(unittest.TestCase):
         lector._estado = {"rumbo": 10.0}
         lector._ts = time.time() - 5.0
         self.assertGreater(lector.edad(), 4.0)
+
+
+class TestUbicacionArgs(unittest.TestCase):
+    """Regresión 1.3: `_ubicacion` respeta `--lat/--lon` de la línea de
+    comandos (que luego se pasa al SkyRenderer para que las efemérides de los
+    planetas usen la misma posición que las estrellas)."""
+
+    def test_lat_lon_distintos_de_la_guardada(self):
+        args = SimpleNamespace(lat=40.0, lon=-3.7)
+        u = _ubicacion(args)
+        self.assertEqual(u.lat, 40.0)
+        self.assertEqual(u.lon, -3.7)
+        self.assertEqual(u.nombre, "demo")
+
+    def test_sin_lat_lon_cae_a_la_guardada_o_por_defecto(self):
+        args = SimpleNamespace(lat=None, lon=None)
+        u = _ubicacion(args)
+        self.assertIsNotNone(u)
+
+
+class TestCelularHTMLCalibracion(unittest.TestCase):
+    """Regresión 1.4: el botón Calibrar se habilita con la primera lectura
+    válida del sensor, no al activarlo; y alpha nulo no se falsifica a 0.
+
+    Es un test de contenido (no hay runner de JS): verifica que el HTML tiene
+    la lógica correcta de habilitación y protección.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        ruta = (Path(__file__).resolve().parents[1] / "src" / "server"
+                / "static" / "celular.html")
+        cls.html = ruta.read_text(encoding="utf-8")
+
+    def test_no_habilita_al_activar_sensor(self):
+        # En el bloque de `btn.onclick` ya no está `btnCal.disabled = false`.
+        onclick = self.html.split("btn.onclick")[1].split("btnCal.onclick")[0]
+        self.assertNotIn("btnCal.disabled = false", onclick)
+
+    def test_habilita_con_la_primera_lectura(self):
+        # El flag `primeraLectura` y la habilitación existen en el manejador
+        # de orientación.
+        self.assertIn("primeraLectura", self.html)
+        self.assertIn("btnCal.disabled = false", self.html)
+
+    def test_alpha_nulo_no_se_convierte_en_cero(self):
+        # La línea vieja `(e.alpha === null) ? 0 : e.alpha` desapareció y el
+        # manejador rechaza alpha nulo antes de habilitar calibrar.
+        self.assertNotIn("(e.alpha === null) ? 0", self.html)
+        self.assertIn("if (e.alpha === null)", self.html)
+
+    def test_calibrar_protege_sin_primera_lectura(self):
+        self.assertIn("Espera la primera lectura del sensor", self.html)
 
 
 if __name__ == "__main__":

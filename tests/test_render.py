@@ -13,9 +13,10 @@ from datetime import datetime, timezone
 import numpy as np
 from skyfield.api import load
 
-from src.skyrender.astro import (RUTA_EFEMERIDES, aplicar_matriz,
-                                 altaz_desde_horizontal, lst_grados,
-                                 matriz_horizontal, matriz_vista_camara)
+from src.skyrender.astro import (RUTA_EFEMERIDES, Ubicacion, aplicar_matriz,
+                                 altaz_con_skyfield, altaz_desde_horizontal,
+                                 lst_grados, matriz_horizontal,
+                                 matriz_vista_camara)
 from src.skyrender.catalogo import RUTA_CATALOGO, cargar_estrellas
 from src.skyrender.constelaciones import segmentos
 from src.skyrender.render import NOMBRES_PROPIOS, SkyRenderer
@@ -134,6 +135,25 @@ class TestRender(unittest.TestCase):
         self.assertEqual(nombres.get(2061), "Betelgeuse")
         self.assertEqual(nombres.get(7001), "Vega")
 
+    def test_todas_las_claves_de_nombres_propios_se_asignan(self):
+        """Regresión 1.2: ninguna clave de NOMBRES_PROPIOS debe quedar huérfana.
+
+        El parsing viejo solo quitaba dígitos al inicio del token, así que
+        "Alp1Cru" no casaba con "Alp Cru" y Acrux / Rigil Kentaurus nunca se
+        asignaban.
+        """
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        asignados = set(renderer._nombres_por_indice.values())
+        self.assertEqual(asignados, set(NOMBRES_PROPIOS.values()))
+
+    def test_acrux_y_rigil_kentaurus_quedan_etiquetadas(self):
+        """Regresión 1.2: HR 4730 (Alp1Cru) y HR 5459 (Alp1Cen) deben resolver
+        a Acrux y Rigil Kentaurus respectivamente."""
+        renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
+        nombres = renderer._nombres_por_indice
+        self.assertEqual(nombres.get(4730), "Acrux")
+        self.assertEqual(nombres.get(5459), "Rigil Kentaurus")
+
     def test_brillo_factor_aumenta_estrellas(self):
         base = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0, brillo_factor=1.0)
         brillante = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
@@ -207,6 +227,73 @@ class TestPlanetas(unittest.TestCase):
         renderer = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0)
         img = renderer.render(_t(), rumbo=180.0, inclinacion=45.0)
         self.assertEqual(img.shape, (720, 1280, 3))
+
+
+@unittest.skipUnless(RUTA_EFEMERIDES.exists(),
+                     "Faltan las efemérides de421.bsp")
+class TestNombresPropiosEnObjetosVisibles(unittest.TestCase):
+    """Regresión 1.2: Acrux y Rigil Kentaurus deben aparecer en la lista de
+    objetos visibles (tecla o), no solo tener clave en NOMBRES_PROPIOS.
+
+    Se apunta a cada uno con su az/alt real calculado con skyfield (fecha de
+    enero en que ambos están sobre el horizonte desde lat 10°N).
+    """
+
+    def setUp(self):
+        self.t = load.timescale().from_datetime(
+            datetime(2026, 1, 15, 8, 30, 0, tzinfo=timezone.utc))
+        self.renderer = SkyRenderer(
+            ubicacion=Ubicacion(lat=10.0, lon=-68.0, nombre="test"),
+            ancho=1280, alto=720, fov_deg=60.0)
+        self.cat = cargar_estrellas(RUTA_CATALOGO)
+
+    def _az_alt(self, hr: int):
+        e = self.cat.por_id(hr)
+        self.assertIsNotNone(e)
+        alt, az = altaz_con_skyfield(np.array([e.ra_deg]), np.array([e.dec_deg]),
+                                     10.0, -68.0, self.t)
+        return float(az[0]), float(alt[0])
+
+    def test_acrux_y_rigil_en_objetos_visibles(self):
+        for hr, nombre in ((4730, "Acrux"), (5459, "Rigil Kentaurus")):
+            with self.subTest(estrella=nombre):
+                az, alt = self._az_alt(hr)
+                objetos = self.renderer.objetos_visibles(self.t, az, alt)
+                nombres = [o["nombre"] for o in objetos]
+                self.assertIn(nombre, nombres)
+                obj = next(o for o in objetos if o["nombre"] == nombre)
+                self.assertEqual(obj["tipo"], "estrella")
+
+
+@unittest.skipUnless(RUTA_EFEMERIDES.exists(),
+                     "Faltan las efemérides de421.bsp")
+class TestToposUsaLaUbicacion(unittest.TestCase):
+    """Regresión 1.3: `--lat/--lon` distintos deben mover también a los
+    planetas/Luna (efemérides `_topos`), no solo a las estrellas.
+
+    Antes la demo construía el renderer sin `ubicacion` (cargaba la guardada)
+    y luego hacía `renderer.ubicacion = ubicacion`; `_topos` quedaba con la
+    ubicación vieja y planetas vs estrellas se desalineaban.
+    """
+
+    def test_planetas_se_mueven_con_la_latitud(self):
+        t = _t()
+        cerca = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
+                            ubicacion=Ubicacion(lat=9.66, lon=-68.58,
+                                                nombre="cerca"))
+        lejos = SkyRenderer(ancho=1280, alto=720, fov_deg=60.0,
+                            ubicacion=Ubicacion(lat=40.0, lon=-68.58,
+                                                nombre="lejos"))
+        p_cerca = cerca._planetas_horizontales(t)
+        p_lejos = lejos._planetas_horizontales(t)
+        self.assertGreaterEqual(len(p_cerca), 7)
+        distintas = sum(
+            1 for nombre in p_cerca
+            if nombre in p_lejos
+            and not np.allclose(p_cerca[nombre], p_lejos[nombre], atol=1e-3))
+        self.assertGreaterEqual(
+            distintas, 5,
+            "la mayoría de los astros debe moverse al cambiar la latitud")
 
 
 if __name__ == "__main__":

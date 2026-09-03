@@ -8,6 +8,13 @@ es el punto de retoma para la próxima sesión.
 **Última fase completada: Fase 11 — Integración final.** Punto de entrada
 único (`portal`), flujo guiado en terminal, docs actualizadas.
 **125/125 tests en verde.**
+**137/137 tests en verde** tras aplicar los 7 bugs de la revisión crítica
+(`PENDIENTES.md` sección 1): el servidor reporta el puerto ocupado/certificado
+ilegible en vez de fallar en silencio, Acrux y Rigil Kentaurus quedan con
+nombre propio y en `objetos_visibles`, los planetas respetan `--lat/--lon`,
+"Calibrar" solo se habilita con la primera lectura válida, el launcher `portal`
+loguea el middleware, la consola de Windows ya no lanza `UnicodeEncodeError` y
+la tabla marca la Fase 4 como "Hecho (implementado)".
 Extras post-Fase 11: tecla `i` (panel completo de información), cámara
 espejada por defecto (`--no-espejo` para la imagen cruda) y lista de objetos
 visibles con apuntado por teclado (tecla `o`, números 1-9/0).
@@ -337,7 +344,7 @@ desarrollador.
 | 1 | Captura de cámara | Hecho (validado por el usuario) |
 | 2 | Detección de manos y marco | Hecho (validado por el usuario) |
 | 3 | Servidor brújula plan A (WiFi + HTTPS) | Hecho (validado por el usuario) |
-| 4 | Plan B (USB + adb reverse) | Pendiente |
+| 4 | Plan B (USB + adb reverse) | Hecho (implementado) |
 | 5 | Calibración | Hecho (validado por el usuario) |
 | 6 | Astrometría | Hecho (validado por el usuario vs Stellarium) |
 | 7 | Render del cielo | Hecho (validado por el usuario; brillo 2.5 por defecto) |

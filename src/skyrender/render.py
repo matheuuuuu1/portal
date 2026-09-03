@@ -20,6 +20,7 @@ skyfield solo cuando el reloj avanza ~1 minuto.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -134,14 +135,24 @@ class SkyRenderer:
         self._nombres_por_indice: dict[int, str] = {}
         for e in self.catalogo.estrellas:
             # El nombre del BSC es "9Alp CMa" (número Flamsteed + Bayer +
-            # constelación). Se quita el número y se deja "Alp CMa" para casar
-            # con las claves de NOMBRES_PROPIOS (el último token por sí solo
-            # sería "CMa", que no coincide).
-            tokens = e.nombre.split()
-            if not tokens:
+            # constelación) o "Alp1Cru" (componente: letra Bayer + dígito +
+            # constelación, concatenados sin espacio). Se quitan los dígitos
+            # y se separa la constelación de 3 letras para casar con las
+            # claves de NOMBRES_PROPIOS ("Alp1Cru" -> "Alp Cru", "9Alp CMa"
+            # -> "Alp CMa"). Sin esto, "Alp Cen"/"Alp Cru" (Rigil Kentaurus
+            # y Acrux) nunca se asignan (bug 1.2).
+            partes = e.nombre.split()
+            if not partes:
                 continue
-            bayer = tokens[0].lstrip("0123456789 ")
-            clave = (bayer + " " + " ".join(tokens[1:])).strip()
+            bayer = re.sub(r"\d", "", partes[0])   # "Alp1Cru" -> "AlpCru"
+            resto = partes[1:]
+            if len(bayer) > 3:
+                # Componente del BSC: las últimas 3 letras son la
+                # constelación ("AlpCru" -> "Alp" + "Cru").
+                constelacion = bayer[-3:]
+                bayer = bayer[:-3]
+                resto = [constelacion] + resto
+            clave = " ".join([bayer] + resto).strip()
             propio = NOMBRES_PROPIOS.get(clave, "")
             if propio:
                 self._nombres_por_indice[e.id] = propio

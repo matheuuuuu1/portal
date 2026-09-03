@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import ssl
+import sys
 import threading
 import time
 import urllib.request
@@ -72,7 +73,7 @@ from skyrender.astro import Ubicacion, cargar_ubicacion
 from skyrender.estetica import ESTETICAS
 from skyrender.render import SkyRenderer
 
-WINDOW_NAME = "Portal al Cielo — Fase 8 (composición)"
+WINDOW_NAME = "Portal al Cielo - Fase 8 (composición)"
 
 
 def fps_counter():
@@ -239,6 +240,7 @@ class CompassReader(threading.Thread):
             self._contexto.verify_mode = ssl.CERT_NONE
 
     def run(self) -> None:
+        fallos = 0
         while not self._stop:
             try:
                 with urllib.request.urlopen(self.url + "/estado",
@@ -248,8 +250,14 @@ class CompassReader(threading.Thread):
                 if datos.get("fresh"):
                     self._estado = datos
                     self._ts = time.time()
+                fallos = 0
             except Exception:
-                pass  # el servidor aún no está o se cayó: se reintenta
+                # El servidor aún no está o se cayó: se reintenta. Aviso una
+                # sola vez si la demo nunca llegó a conectar (bug 1.1).
+                fallos += 1
+                if self._estado is None and fallos == 40:  # ~10 s a 0.25 s
+                    print(f"Brújula: sin conexión con {self.url}/estado "
+                          f"(el servidor no responde). Reintentando...")
             time.sleep(0.25)
 
     def detener(self) -> None:
@@ -282,6 +290,12 @@ def _ubicacion(args, aviso=False) -> Ubicacion:
 
 
 def run(argv=None) -> int:
+    # Consola de Windows (cp1252/cp850): en redirección a archivo, que los
+    # caracteres no representables no lancen UnicodeEncodeError (bug 1.6).
+    for _s in (sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(
         description="Demo de composición: cielo dentro del marco de las manos (F8)")
     parser.add_argument("--fov", type=float, default=60.0,
@@ -364,14 +378,18 @@ def run(argv=None) -> int:
 
     # El cielo se renderiza a 540p por defecto (Fase 10, mitigación del
     # ADR-007) y el compositor lo escala al tamaño del frame; ahorra ~7 ms.
+    # La ubicación se pasa en la construcción: `_topos` (efemérides de los
+    # planetas/Luna) se calcula en `__init__`, así que asignarla después
+    # dejaría las estrellas en la posición nueva y los planetas en la vieja
+    # (bug 1.3, visible con `--lat/--lon` distintos de la guardada).
     try:
         renderer = SkyRenderer(ancho=args.render_ancho, alto=args.render_alto,
                                fov_deg=args.fov,
-                               brillo_factor=brillo, estetica=args.estetica)
+                               brillo_factor=brillo, estetica=args.estetica,
+                               ubicacion=ubicacion)
     except FileNotFoundError as e:
         print(f"Error al cargar el cielo: {e}")
         return 1
-    renderer.ubicacion = ubicacion
     compositor = Compositor(ancho=1280, alto=720,
                             borde_suave=args.borde_suave, modo=args.modo)
     # El medidor recibe píxeles de la ventana completa; se escalan al render.
@@ -380,7 +398,7 @@ def run(argv=None) -> int:
     ts = load.timescale()
     tick = fps_counter()
 
-    print("Fase 8/9 — Composición. Flechas: rumbo/inclinación. "
+    print("Fase 8/9 - Composición. Flechas: rumbo/inclinación. "
           "[ / ]: brillo. n: etiquetas (auto/sí/no). e: estética. "
           "m: modo del marco. c: medidor del cursor. i: panel de info. "
           "o: objetos visibles (1-9/0 apunta). b: brújula manual. "

@@ -1,9 +1,14 @@
 """Tests del launcher unificado (Fase 11, src/app/main.py)."""
 
+import contextlib
+import io
+import socket
+import threading
 import unittest
 from unittest.mock import patch
 
-from app.main import _verificar_prerequisitos, _verificar_certificado
+from app.main import (_arrancar_servidor, _verificar_certificado,
+                      _verificar_prerequisitos, main)
 
 
 class TestVerificarPrerequisitos(unittest.TestCase):
@@ -62,6 +67,53 @@ class TestVerificarCertificado(unittest.TestCase):
         errores = _verificar_certificado(tls=True)
         self.assertGreater(len(errores), 0)
         self.assertIn("gen_cert", errores[0])
+
+
+class TestArrancarServidorPuertoOcupado(unittest.TestCase):
+    """Regresión 1.1: un puerto ocupado debe reportarse, no tragarse.
+
+    Antes, `_arrancar_servidor` hacía `except Exception: pass` y el launcher
+    imprimía las instrucciones como si todo fuera bien, con la demo corriendo
+    sin brújula para siempre.
+    """
+
+    def _puerto_ocupado(self) -> int:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        self.addCleanup(s.close)
+        return s.getsockname()[1]
+
+    def test_puerto_ocupado_deja_el_error_accesible(self):
+        port = self._puerto_ocupado()
+        arrancado = threading.Event()
+        error: dict = {}
+        hilo = threading.Thread(
+            target=_arrancar_servidor,
+            args=("127.0.0.1", port, False, arrancado, error),
+            daemon=True)
+        hilo.start()
+        self.assertTrue(arrancado.wait(timeout=15.0),
+                        "el hilo debe confirmar el arranque (éxito o error)")
+        self.assertIn("excepcion", error,
+                      "el error del puerto ocupado debe quedar accesible")
+        self.assertIsInstance(error["excepcion"], OSError)
+        self.assertIn("mensaje", error)
+        hilo.join(timeout=10.0)
+
+    def test_main_devuelve_1_con_puerto_ocupado(self):
+        """El launcher completo debe abortar (código 1) y no seguir a la demo.
+
+        Con el host explícito en 127.0.0.1 (misma interfaz que el socket que
+        ocupa el puerto), Windows rechaza el bind y el launcher debe reportarlo.
+        """
+        port = self._puerto_ocupado()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            codigo = main(["--host", "127.0.0.1", "--port", str(port),
+                           "--no-tls", "--camera", "999"])
+        self.assertEqual(codigo, 1)
+        self.assertIn("no se pudo arrancar el servidor", buf.getvalue())
 
 
 if __name__ == "__main__":

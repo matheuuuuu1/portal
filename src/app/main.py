@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import socket
 import sys
 import threading
+import traceback
 from pathlib import Path
 
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -67,13 +69,28 @@ def _verificar_certificado(tls: bool) -> list[str]:
 
 # -- servidor en hilo daemon --------------------------------------------------
 
-def _arrancar_servidor(host: str, port: int, tls: bool) -> None:
-    """Arranca el servidor de la brújula en un hilo daemon."""
+def _arrancar_servidor(host: str, port: int, tls: bool,
+                       arrancado: threading.Event,
+                       error: dict) -> None:
+    """Arranca el servidor de la brújula en un hilo daemon.
+
+    `arrancado` se marca cuando el servidor confirmó el arranque O cuando
+    falló; `error` queda con los detalles si falló (puerto ocupado,
+    certificado ilegible, etc.). El launcher espera ese evento y reporta.
+    """
     from server.web import iniciar_servidor
 
     async def _run():
-        runner, _site = await iniciar_servidor(
-            host=host, port=port, tls=tls)
+        try:
+            runner, _site = await iniciar_servidor(
+                host=host, port=port, tls=tls)
+        except Exception as e:  # noqa: BLE001 — el launcher debe reportar
+            error["excepcion"] = e
+            error["mensaje"] = str(e)
+            error["traceback"] = traceback.format_exc()
+            arrancado.set()
+            return
+        arrancado.set()
         try:
             await asyncio.Event().wait()
         finally:
@@ -81,8 +98,8 @@ def _arrancar_servidor(host: str, port: int, tls: bool) -> None:
 
     try:
         asyncio.run(_run())
-    except Exception:
-        pass  # el hilo muere con el proceso
+    except Exception:  # noqa: BLE001 — caída posterior al arranque
+        traceback.print_exc()
 
 
 def _obtener_ip_local() -> str:
@@ -100,8 +117,18 @@ def _obtener_ip_local() -> str:
 # -- main ----------------------------------------------------------------------
 
 def main(argv=None) -> int:
+    # El middleware del servidor loguea a "portal.server"; sin basicConfig la
+    # ruta normal (`portal`) deja el registro mudo (bug 1.5).
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    # Consola de Windows (cp1252/cp850): en redirección a archivo, que los
+    # caracteres no representables no lancen UnicodeEncodeError (bug 1.6).
+    for _s in (sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(
-        description="Portal al Cielo — arranca servidor + demo (Fase 11)",
+        description="Portal al Cielo - arranca servidor + demo (Fase 11)",
         add_help=True)
     # Args del servidor (solo los que el launcher necesita conocer).
     parser.add_argument("--host", default="0.0.0.0",
@@ -131,11 +158,30 @@ def main(argv=None) -> int:
     # --- servidor en hilo daemon ----------------------------------------------
     scheme = "https" if server_args.tls else "http"
     servidor_url = f"{scheme}://localhost:{server_args.port}"
+    arrancado = threading.Event()
+    error_servidor: dict = {}
     hilo_servidor = threading.Thread(
         target=_arrancar_servidor,
-        args=(server_args.host, server_args.port, server_args.tls),
+        args=(server_args.host, server_args.port, server_args.tls,
+              arrancado, error_servidor),
         daemon=True)
     hilo_servidor.start()
+
+    # Espera a que el servidor confirme el arranque (o falle). Si el puerto
+    # está ocupado o el certificado es ilegible, no seguimos como si nada.
+    if not arrancado.wait(timeout=10.0):
+        print(f"Error: el servidor no confirmó el arranque en "
+              f"{server_args.host}:{server_args.port} (timeout de 10 s).")
+        return 1
+    if error_servidor:
+        exc = error_servidor.get("excepcion")
+        print(f"Error: no se pudo arrancar el servidor de la brújula en "
+              f"{server_args.host}:{server_args.port}.")
+        print(f"  {error_servidor.get('mensaje') or repr(exc)}")
+        print("  Comprueba que el puerto esté libre (otra instancia de "
+              "portal/servidor) y que los certificados sean legibles "
+              "(python tools/gen-cert/gen_cert.py).")
+        return 1
 
     ip = _obtener_ip_local()
 
