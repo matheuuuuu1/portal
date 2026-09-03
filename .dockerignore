@@ -1,0 +1,14 @@
+﻿.git
+.gitattributes
+venv/
+env/
+.venv/
+viejovenv/
+__pycache__/
+*.pyc
+.vscode/.idea/
+.env
+*.log
+logs/
+*.egg-info/
+

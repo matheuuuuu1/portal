@@ -1,0 +1,17 @@
+# portal-al-cielo - webcam -> portal al cielo (MediaPipe + Skyfield)
+services:
+  portal:
+    build: .
+    container_name: portal-cielo
+    restart: unless-stopped
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      QT_QPA_PLATFORM: xcb
+      # datos/cámara según .env del host
+      PYTHONPATH: /app/src
+    devices:
+      - ${CAMERA_DEVICE:-/dev/video0}:/dev/video0
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+    ports:
+      - "${PORT:-8080}:8080"
